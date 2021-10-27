@@ -1,0 +1,110 @@
+syntax = "proto3";
+
+package hcl;
+
+option go_package = "github.com/apparentlymart/go-protohcl/protohcl/protohclext";
+
+import "google/protobuf/descriptor.proto";
+
+// WARNING: The option extensions in this file are currently using the
+// company-internal option number range, making this not yet appropriate
+// for real use across independently-developed systems.
+//
+// Once this definition is proven, we'll request an assigned extension
+// number in the extension registry to allow for broader use.
+//     https://github.com/protocolbuffers/protobuf/blob/master/docs/options.md
+//
+// Once that extension number is assigned, there will be a breaking change
+// to this definition to switch to that number.
+extend google.protobuf.FieldOptions {
+  Attribute attr = 50000;
+  NestedBlock block = 50001;
+  BlockLabel label = 50002;
+  bool flatten = 50004;
+}
+
+// Specifies that a particular field should recieve the value of an HCL
+// attribute.
+message Attribute {
+  message Raw {
+    enum Mode {
+      // MessagePack is the most expressive wire encoding for HCL values,
+      // because it's able to preserve unknown values using a MessagePack
+      // extension type.
+      MESSAGEPACK = 0;
+
+      // JSON can encode all _known_ HCL values, but cannot encode unknown
+      // values.
+      JSON = 1;
+    }
+
+    // The serialization format to use to serialize the raw HCL value.
+    //
+    // The chosen serialization format will constrain what subset of HCL
+    // values can be encoded. None of the encoding formats can preserve
+    // "marked" values, in applications which use them; those must be
+    // sent out-of-band if needed.
+    Mode format = 1;
+  }
+
+  // Name is the attribute name expected for this attribute in the input
+  // configuration. If unset, protohcl will use the proto field name.
+  // Attribute names and nested block types must be unique within a
+  // particular message, including any other message types that "flatten"
+  // into their parent.
+  string name = 1;
+
+  // Mark a field as required if you want the HCL decoder to reject bodies
+  // that don't include the attribute at all.
+  bool required = 2;
+
+  // An optional HCL-oriented type constraint, represented in HCL's type
+  // expression syntax. By default protohcl chooses an HCL type constraint
+  // automatically based on the field type, but because the HCL and protobuf
+  // type systems are not totally congruent it may sometimes be necessary to
+  // request different behavior.
+  //
+  // Not all combinations of proto field type and HCL field type are valid:
+  // - Any of the primitive types may encode into a proto string field,
+  //   using the usual primitive-to-string conversion rules. This can be
+  //   particularly useful for preserving high-precision numbers.
+  // - A list or set type may encode into a "repeated" of a proto type
+  //   compatible with the collection's element type.
+  // - A map type may encode into a map of a proto type compatible with the
+  //   collection's element type.
+  // - An object type may encode into a message type whose fields also have
+  //   HCL annotations, as long as all of the fields decode as attributes.
+  //   Decoding as nested block is not valid inside an attribute, because
+  //   only nested blocks can contain other nested blocks.
+  // - Any type constraint at all is valid if the proto field type is "bytes"
+  //   AND if you also populate field "raw" with raw value encoding settings.
+  //   You can choose a dynamic type constraint if you need protohcl to also
+  //   encode dynamic type information into the raw field.
+  // - There is currently no supported encoding for tuple types except for
+  //   the raw mode, because there is no direct analog in protobuf and
+  //   tuple types are rarely used directly as attribute type constraints
+  //   anyway. If you need one, use raw mode.
+  string type = 3;
+
+  // For "bytes" fields only, protohcl can preserve the resulting HCL value
+  // by encoding as an inner encoding format, which therefore allows
+  // the other party to decode and recover the original HCL value without
+  // losing type information. This must always be unset for other field types.
+  // Any field with "raw" set MUST also set "type".
+  Raw raw = 4;
+}
+
+// Specifies that a particular field should recieve content from a nested
+// HCL block. This decoding mode is only supported for message-typed fields.
+// Mark the field as "repeated" to accept multiple nested blocks of the same
+// type, preserving the source declaration order.
+message NestedBlock { string type_name = 1; }
+
+// Specifies that a particular field should recieve content from a label
+// of the block being decoded. This makes sense only for message types
+// that are representing nested blocks.
+// The number of BlockLabel fields in a message defines now many labels
+// are required for the corresponding block type. The name assigned to
+// each label is used only for error messages when the configuration author
+// does not write the correct number of labels.
+message BlockLabel { string name = 1; }

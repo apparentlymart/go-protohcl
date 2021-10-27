@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package hcl.testschema;
+
+option go_package = "github.com/apparentlymart/go-protohcl/protohcl/internal/testschema";
+
+import "hcl.proto";
+
+message Root {
+  // Name represents an HCL attribute
+  string name = 1 [ (hcl.attr).name = "name" ];
+}

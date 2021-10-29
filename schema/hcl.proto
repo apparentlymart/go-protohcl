@@ -26,32 +26,23 @@ extend google.protobuf.FieldOptions {
 // Specifies that a particular field should recieve the value of an HCL
 // attribute.
 message Attribute {
-  message Raw {
-    enum Mode {
-      // MessagePack is the most expressive wire encoding for HCL values,
-      // because it's able to preserve unknown values using a MessagePack
-      // extension type.
-      MESSAGEPACK = 0;
+  enum RawMode {
+    NOT_RAW = 0;
 
-      // JSON can encode all _known_ HCL values, but cannot encode unknown
-      // values.
-      JSON = 1;
-    }
+    // MessagePack is the most expressive wire encoding for HCL values,
+    // because it's able to preserve unknown values using a MessagePack
+    // extension type.
+    MESSAGEPACK = 1;
 
-    // The serialization format to use to serialize the raw HCL value.
-    //
-    // The chosen serialization format will constrain what subset of HCL
-    // values can be encoded. None of the encoding formats can preserve
-    // "marked" values, in applications which use them; those must be
-    // sent out-of-band if needed.
-    Mode format = 1;
+    // JSON can encode all _known_ HCL values, but cannot encode unknown
+    // values.
+    JSON = 2;
   }
 
   // Name is the attribute name expected for this attribute in the input
-  // configuration. If unset, protohcl will use the proto field name.
-  // Attribute names and nested block types must be unique within a
-  // particular message, including any other message types that "flatten"
-  // into their parent.
+  // configuration. This must be set to declare that a field represents an
+  // HCL attribute, and that the other fields here are relevant; otherwise,
+  // the other fields will be entirely ignored.
   string name = 1;
 
   // Mark a field as required if you want the HCL decoder to reject bodies
@@ -91,14 +82,19 @@ message Attribute {
   // the other party to decode and recover the original HCL value without
   // losing type information. This must always be unset for other field types.
   // Any field with "raw" set MUST also set "type".
-  Raw raw = 4;
+  RawMode raw = 4;
 }
 
 // Specifies that a particular field should recieve content from a nested
 // HCL block. This decoding mode is only supported for message-typed fields.
 // Mark the field as "repeated" to accept multiple nested blocks of the same
 // type, preserving the source declaration order.
-message NestedBlock { string type_name = 1; }
+message NestedBlock {
+  // Name is the block type name expected for blocks of this type in the input
+  // configuration. This must be set to declare that a field represents an
+  // HCL nested block.
+  string type_name = 1;
+}
 
 // Specifies that a particular field should recieve content from a label
 // of the block being decoded. This makes sense only for message types
@@ -107,4 +103,8 @@ message NestedBlock { string type_name = 1; }
 // are required for the corresponding block type. The name assigned to
 // each label is used only for error messages when the configuration author
 // does not write the correct number of labels.
-message BlockLabel { string name = 1; }
+message BlockLabel {
+  // Name is the name of this label to be used in error messages. This must be
+  // set to declare that a field represents an HCL nested block.
+  string name = 1;
+}

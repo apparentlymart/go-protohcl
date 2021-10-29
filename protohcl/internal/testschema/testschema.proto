@@ -9,4 +9,12 @@ import "hcl.proto";
 message Root {
   // Name represents an HCL attribute
   string name = 1 [ (hcl.attr).name = "name" ];
+
+  // Thing represents nested blocks of type "thing"
+  repeated Thing things = 2 [ (hcl.block).type_name = "thing" ];
+}
+
+message Thing {
+  // The first label on a nested "thing" block
+  string name = 1 [ (hcl.label).name = "name" ];
 }

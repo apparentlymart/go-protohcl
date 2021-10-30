@@ -18,11 +18,16 @@ func TestBodySchema(t *testing.T) {
 
 		want := &hcl.BodySchema{
 			Attributes: []hcl.AttributeSchema{
-				{Name: "name"},
+				{Name: "name", Required: true},
+				{Name: "count"},
 			},
 			Blocks: []hcl.BlockHeaderSchema{
 				{
 					Type:       "thing",
+					LabelNames: []string{"name"},
+				},
+				{
+					Type:       "other_thing",
 					LabelNames: []string{"name"},
 				},
 			},

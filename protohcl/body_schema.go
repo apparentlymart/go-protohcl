@@ -86,11 +86,40 @@ func bodySchema(desc protoreflect.MessageDescriptor) (*hcl.BodySchema, error) {
 			blockTypes[blockS.Type] = field.FullName()
 
 		case flatten:
-			if labelOpts.Name != "" {
+			if labelOpts != nil && labelOpts.Name != "" {
 				return nil, schemaErrorf(field.FullName(), "cannot be block label %q and also flatten into the current body", labelOpts.Name)
 			}
 
-			return nil, schemaErrorf(field.FullName(), "flatten mode not implemented yet")
+			// For our schema-building purposes we'll deal with "flatten" by
+			// just constructing a schema for the child message and then
+			// merging it into the one we're currently working on.
+			if field.Kind() != protoreflect.MessageKind {
+				return nil, schemaErrorf(desc.FullName(), "field to be flattened must have message type, not %s", field.Kind())
+			}
+			nestSchema, err := bodySchema(field.Message())
+			if err != nil {
+				return nil, schemaErrorf(desc.FullName(), "invalid message to flatten: %w", err)
+			}
+			for _, attrS := range nestSchema.Attributes {
+				if existingName, exists := attrs[attrS.Name]; exists {
+					return nil, schemaErrorf(field.FullName(), "flattened-in attribute %q conflicts with %s", attrS.Name, existingName)
+				}
+				if existingName, exists := blockTypes[attrS.Name]; exists {
+					return nil, schemaErrorf(field.FullName(), "flattened-in attribute %q conflicts with block type declared by %s", attrS.Name, existingName)
+				}
+				ret.Attributes = append(ret.Attributes, attrS)
+				attrs[attrS.Name] = field.FullName()
+			}
+			for _, blockS := range nestSchema.Blocks {
+				if existingName, exists := attrs[blockS.Type]; exists {
+					return nil, schemaErrorf(field.FullName(), "flattened-in block type %q conflicts with attribute declared by %s", blockS.Type, existingName)
+				}
+				if existingName, exists := blockTypes[blockS.Type]; exists {
+					return nil, schemaErrorf(field.FullName(), "flattened-in block type %q conflicts with %s", blockS.Type, existingName)
+				}
+				ret.Blocks = append(ret.Blocks, blockS)
+				blockTypes[blockS.Type] = field.FullName()
+			}
 
 		case labelOpts != nil && labelOpts.Name != "":
 			// We don't care about labels when we're dealing with bodies. That's

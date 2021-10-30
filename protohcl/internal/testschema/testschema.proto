@@ -8,13 +8,24 @@ import "hcl.proto";
 
 message Root {
   // Name represents an HCL attribute
-  string name = 1 [ (hcl.attr).name = "name" ];
+  string name = 1 [ (hcl.attr).name = "name", (hcl.attr).required = true ];
 
   // Thing represents nested blocks of type "thing"
   repeated Thing things = 2 [ (hcl.block).type_name = "thing" ];
+
+  MoreRoot more = 3 [ (hcl.flatten) = true ];
 }
 
 message Thing {
   // The first label on a nested "thing" block
   string name = 1 [ (hcl.label).name = "name" ];
+}
+
+message MoreRoot {
+  // An additional attribute to be "flattened" into root.
+  int64 count = 1 [ (hcl.attr).name = "count" ];
+
+  // We can re-use the same Thing message type for another block type that
+  // has a different name from HCL's perspective.
+  Thing other_thing = 2 [ (hcl.block).type_name = "other_thing" ];
 }

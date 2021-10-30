@@ -3,11 +3,8 @@ package protohcl
 import (
 	"fmt"
 
-	"github.com/apparentlymart/go-protohcl/protohcl/protohclext"
 	"github.com/hashicorp/hcl/v2"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
-	"google.golang.org/protobuf/types/descriptorpb"
 )
 
 // bodySchema constucts a HCL body schema from the given message descriptor,
@@ -23,38 +20,14 @@ func bodySchema(desc protoreflect.MessageDescriptor) (*hcl.BodySchema, error) {
 	for i := 0; i < fieldCount; i++ {
 		field := desc.Fields().Get(i)
 
-		opts, ok := field.Options().(*descriptorpb.FieldOptions)
-		if !ok {
-			// If missing or totally invalid options then we skip this one.
-			// This isn't an error because the schema didn't explicitly opt in
-			// to HCL processing yet.
-			continue
+		elem, err := GetFieldElem(field)
+		if err != nil {
+			return nil, err // should already be a schemaError
 		}
 
-		// These extensions are all mutually-exclusive with one another,
-		// because each proto field must map to zero or one HCL schema
-		// constructs.
-		attrOpts := proto.GetExtension(opts, protohclext.E_Attr).(*protohclext.Attribute)
-		blockOpts := proto.GetExtension(opts, protohclext.E_Block).(*protohclext.NestedBlock)
-		flatten := proto.GetExtension(opts, protohclext.E_Flatten).(bool)
-		labelOpts := proto.GetExtension(opts, protohclext.E_Label).(*protohclext.BlockLabel)
-
-		switch {
-		case attrOpts != nil && attrOpts.Name != "":
-			if blockOpts != nil && blockOpts.TypeName != "" {
-				return nil, schemaErrorf(field.FullName(), "cannot be both attribute %q and nested block type %q", attrOpts.Name, blockOpts.TypeName)
-			}
-			if flatten {
-				return nil, schemaErrorf(field.FullName(), "cannot be attribute %q and also flatten into the current body", attrOpts.Name)
-			}
-			if labelOpts != nil && labelOpts.Name != "" {
-				return nil, schemaErrorf(field.FullName(), "cannot be both attribute %q and block label %q", attrOpts.Name, labelOpts.Name)
-			}
-
-			attrS, err := attributeSchema(field, attrOpts)
-			if err != nil {
-				return nil, err // err should already be a schemaError
-			}
+		switch elem := elem.(type) {
+		case FieldAttribute:
+			attrS := attributeSchema(elem)
 			if existingName, exists := attrs[attrS.Name]; exists {
 				return nil, schemaErrorf(field.FullName(), "declaration of attribute %q conflicts with %s", attrS.Name, existingName)
 			}
@@ -64,18 +37,8 @@ func bodySchema(desc protoreflect.MessageDescriptor) (*hcl.BodySchema, error) {
 			ret.Attributes = append(ret.Attributes, attrS)
 			attrs[attrS.Name] = field.FullName()
 
-		case blockOpts != nil && blockOpts.TypeName != "":
-			if flatten {
-				return nil, schemaErrorf(field.FullName(), "cannot be nested block type %q and also flatten into the current body", attrOpts.Name)
-			}
-			if labelOpts != nil && labelOpts.Name != "" {
-				return nil, schemaErrorf(field.FullName(), "cannot be both nested block type %q and block label %q", attrOpts.Name, labelOpts.Name)
-			}
-
-			blockS, err := blockTypeSchema(field, blockOpts)
-			if err != nil {
-				return nil, err // err should already be a schemaError
-			}
+		case FieldNestedBlockType:
+			blockS := blockTypeSchema(elem)
 			if existingName, exists := attrs[blockS.Type]; exists {
 				return nil, schemaErrorf(field.FullName(), "declaration of block type %q conflicts with attribute declared by %s", blockS.Type, existingName)
 			}
@@ -85,18 +48,11 @@ func bodySchema(desc protoreflect.MessageDescriptor) (*hcl.BodySchema, error) {
 			ret.Blocks = append(ret.Blocks, blockS)
 			blockTypes[blockS.Type] = field.FullName()
 
-		case flatten:
-			if labelOpts != nil && labelOpts.Name != "" {
-				return nil, schemaErrorf(field.FullName(), "cannot be block label %q and also flatten into the current body", labelOpts.Name)
-			}
-
+		case FieldFlattened:
 			// For our schema-building purposes we'll deal with "flatten" by
 			// just constructing a schema for the child message and then
 			// merging it into the one we're currently working on.
-			if field.Kind() != protoreflect.MessageKind {
-				return nil, schemaErrorf(desc.FullName(), "field to be flattened must have message type, not %s", field.Kind())
-			}
-			nestSchema, err := bodySchema(field.Message())
+			nestSchema, err := bodySchema(elem.Nested)
 			if err != nil {
 				return nil, schemaErrorf(desc.FullName(), "invalid message to flatten: %w", err)
 			}
@@ -121,7 +77,7 @@ func bodySchema(desc protoreflect.MessageDescriptor) (*hcl.BodySchema, error) {
 				blockTypes[blockS.Type] = field.FullName()
 			}
 
-		case labelOpts != nil && labelOpts.Name != "":
+		case FieldBlockLabel:
 			// We don't care about labels when we're dealing with bodies. That's
 			// relevent only for nested message types in blockTypeSchema.
 			continue
@@ -137,49 +93,48 @@ func bodySchema(desc protoreflect.MessageDescriptor) (*hcl.BodySchema, error) {
 	return &ret, nil
 }
 
-func attributeSchema(desc protoreflect.FieldDescriptor, opts *protohclext.Attribute) (hcl.AttributeSchema, error) {
+func attributeSchema(elem FieldAttribute) hcl.AttributeSchema {
 	return hcl.AttributeSchema{
-		Name:     opts.Name,
-		Required: opts.Required,
+		Name:     elem.Name,
+		Required: elem.Required,
 
 		// At the HCL raw schema level we don't actually care about the type
 		// or encoding mode yet. That'll be for the decoder to deal with once
 		// it's holding the value of a concrete hcl.Expression. However,
 		// that does mean that some schemaError results will be deferred until
 		// decoding time.
-	}, nil
+	}
 }
 
-func blockTypeSchema(desc protoreflect.FieldDescriptor, opts *protohclext.NestedBlock) (hcl.BlockHeaderSchema, error) {
-	if desc.Kind() != protoreflect.MessageKind {
-		return hcl.BlockHeaderSchema{}, schemaErrorf(desc.FullName(), "field representing nested block must have message type, not %s", desc.Kind())
-	}
-
+func blockTypeSchema(elem FieldNestedBlockType) hcl.BlockHeaderSchema {
 	// We need to search in the nested message for any label-annotated fields,
 	// which will each in turn define one block label.
 	var labelNames []string
-	msg := desc.Message()
+	msg := elem.Nested
 	fieldCount := msg.Fields().Len()
 
 	for i := 0; i < fieldCount; i++ {
 		field := msg.Fields().Get(i)
 
-		opts, ok := field.Options().(*descriptorpb.FieldOptions)
-		if !ok {
+		elem, err := GetFieldElem(field)
+		if err != nil {
+			// We'll catch this error in the caller anyway, so we'll just
+			// ignore it.
 			continue
 		}
 
-		if !proto.HasExtension(opts, protohclext.E_Label) {
-			continue
+		switch elem := elem.(type) {
+		case FieldBlockLabel:
+			labelNames = append(labelNames, elem.Name)
+		default:
+			// Everything else is irrelevant for our purposes here.
 		}
-		labelOpts := proto.GetExtension(opts, protohclext.E_Label).(*protohclext.BlockLabel)
-		labelNames = append(labelNames, labelOpts.Name)
 	}
 
 	return hcl.BlockHeaderSchema{
-		Type:       opts.TypeName,
+		Type:       elem.TypeName,
 		LabelNames: labelNames,
-	}, nil
+	}
 }
 
 // schemaError is an error type used for any situation where the given message
@@ -213,4 +168,31 @@ func (err schemaError) Error() string {
 
 func (err schemaError) Unwrap() error {
 	return err.Err
+}
+
+func (err schemaError) Diagnostic() *hcl.Diagnostic {
+	return &hcl.Diagnostic{
+		Severity: hcl.DiagError,
+		Summary:  "Invalid configuration schema",
+		Detail: fmt.Sprintf(
+			"Invalid HCL annotations in protobuf schema for %s: %s.\n\nThis is a bug in the component that defined this schema, and not an error in the given configuration.",
+			err.Decl, err.Err.Error(),
+		),
+	}
+}
+
+func schemaErrorDiagnostic(err error) *hcl.Diagnostic {
+	switch err := err.(type) {
+	case schemaError:
+		return err.Diagnostic()
+	default:
+		return &hcl.Diagnostic{
+			Severity: hcl.DiagError,
+			Summary:  "Invalid configuration schema",
+			Detail: fmt.Sprintf(
+				"Failed to construct configuration schema from protobuf schema: %s.\n\nThis is a bug in the component that defined this schema, and not an error in the given configuration.",
+				err.Error(),
+			),
+		}
+	}
 }

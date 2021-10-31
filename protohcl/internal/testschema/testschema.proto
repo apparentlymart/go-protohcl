@@ -30,12 +30,12 @@ message MoreRoot {
   Thing other_thing = 2 [ (hcl.block).type_name = "other_thing" ];
 }
 
-message SimpleRoot {
+message WithStringAttr {
   // Name represents an HCL attribute
   string name = 1 [ (hcl.attr).name = "name", (hcl.attr).type = "string" ];
 }
 
-message SimpleRawRoot {
+message WithRawDynamicAttr {
   // Name represents an HCL attribute
   bytes raw = 1 [ (hcl.attr).name = "raw", (hcl.attr).type = "any", (hcl.attr).raw = JSON ];
 }

@@ -16,8 +16,8 @@ var protoCmpOpt = protocmp.Transform()
 
 func TestDecodeBody(t *testing.T) {
 	fileDesc := testschema.File_testschema_proto
-	simpleRootDesc := fileDesc.Messages().ByName(protoreflect.Name("SimpleRoot"))
-	simpleRawRootDesc := fileDesc.Messages().ByName(protoreflect.Name("SimpleRawRoot"))
+	simpleRootDesc := fileDesc.Messages().ByName(protoreflect.Name("WithStringAttr"))
+	simpleRawRootDesc := fileDesc.Messages().ByName(protoreflect.Name("WithRawDynamicAttr"))
 	//rootDesc := fileDesc.Messages().ByName(protoreflect.Name("Root"))
 
 	tests := map[string]struct {
@@ -31,7 +31,7 @@ func TestDecodeBody(t *testing.T) {
 			``,
 			simpleRootDesc,
 			nil,
-			&testschema.SimpleRoot{},
+			&testschema.WithStringAttr{},
 			nil,
 		},
 		"string attribute": {
@@ -40,7 +40,7 @@ func TestDecodeBody(t *testing.T) {
 			`,
 			simpleRootDesc,
 			nil,
-			&testschema.SimpleRoot{
+			&testschema.WithStringAttr{
 				Name: "Jackson",
 			},
 			nil,
@@ -51,7 +51,7 @@ func TestDecodeBody(t *testing.T) {
 			`,
 			simpleRootDesc,
 			nil,
-			&testschema.SimpleRoot{
+			&testschema.WithStringAttr{
 				Name: "true",
 			},
 			nil,
@@ -62,7 +62,7 @@ func TestDecodeBody(t *testing.T) {
 			`,
 			simpleRootDesc,
 			nil,
-			&testschema.SimpleRoot{},
+			&testschema.WithStringAttr{},
 			nil,
 		},
 		"raw dynamic attribute as string": {
@@ -71,7 +71,7 @@ func TestDecodeBody(t *testing.T) {
 			`,
 			simpleRawRootDesc,
 			nil,
-			&testschema.SimpleRawRoot{
+			&testschema.WithRawDynamicAttr{
 				Raw: []byte(`{"value":"Hello","type":"string"}`),
 			},
 			nil,
@@ -82,7 +82,7 @@ func TestDecodeBody(t *testing.T) {
 			`,
 			simpleRawRootDesc,
 			nil,
-			&testschema.SimpleRawRoot{
+			&testschema.WithRawDynamicAttr{
 				Raw: []byte(`{"value":2,"type":"number"}`),
 			},
 			nil,
@@ -93,7 +93,7 @@ func TestDecodeBody(t *testing.T) {
 			`,
 			simpleRawRootDesc,
 			nil,
-			&testschema.SimpleRawRoot{
+			&testschema.WithRawDynamicAttr{
 				// "Raw" doesn't get populated at all for null, for consistency with omitting it
 			},
 			nil,

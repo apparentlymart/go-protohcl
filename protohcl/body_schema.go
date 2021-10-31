@@ -31,6 +31,7 @@ func bodySchema(desc protoreflect.MessageDescriptor) (*hcl.BodySchema, error) {
 	// and report conflicts.
 	attrs := map[string]protoreflect.FullName{}
 	blockTypes := map[string]protoreflect.FullName{}
+	blockLabels := map[string]protoreflect.FullName{}
 
 	fieldCount := desc.Fields().Len()
 	for i := 0; i < fieldCount; i++ {
@@ -50,6 +51,9 @@ func bodySchema(desc protoreflect.MessageDescriptor) (*hcl.BodySchema, error) {
 			if existingName, exists := blockTypes[attrS.Name]; exists {
 				return nil, schemaErrorf(field.FullName(), "declaration of attribute %q conflicts with block type declared by %s", attrS.Name, existingName)
 			}
+			if existingName, exists := blockLabels[attrS.Name]; exists {
+				return nil, schemaErrorf(field.FullName(), "declaration of attribute %q conflicts with block label name declared by %s", attrS.Name, existingName)
+			}
 			ret.Attributes = append(ret.Attributes, attrS)
 			attrs[attrS.Name] = field.FullName()
 
@@ -60,6 +64,9 @@ func bodySchema(desc protoreflect.MessageDescriptor) (*hcl.BodySchema, error) {
 			}
 			if existingName, exists := blockTypes[blockS.Type]; exists {
 				return nil, schemaErrorf(field.FullName(), "declaration of block type %q conflicts with %s", blockS.Type, existingName)
+			}
+			if existingName, exists := blockLabels[blockS.Type]; exists {
+				return nil, schemaErrorf(field.FullName(), "declaration of block type %q conflicts with block label name declared by %s", blockS.Type, existingName)
 			}
 			ret.Blocks = append(ret.Blocks, blockS)
 			blockTypes[blockS.Type] = field.FullName()
@@ -79,6 +86,9 @@ func bodySchema(desc protoreflect.MessageDescriptor) (*hcl.BodySchema, error) {
 				if existingName, exists := blockTypes[attrS.Name]; exists {
 					return nil, schemaErrorf(field.FullName(), "flattened-in attribute %q conflicts with block type declared by %s", attrS.Name, existingName)
 				}
+				if existingName, exists := blockLabels[attrS.Name]; exists {
+					return nil, schemaErrorf(field.FullName(), "flattened-in attribute %q conflicts with block label name declared by %s", attrS.Name, existingName)
+				}
 				ret.Attributes = append(ret.Attributes, attrS)
 				attrs[attrS.Name] = field.FullName()
 			}
@@ -89,14 +99,27 @@ func bodySchema(desc protoreflect.MessageDescriptor) (*hcl.BodySchema, error) {
 				if existingName, exists := blockTypes[blockS.Type]; exists {
 					return nil, schemaErrorf(field.FullName(), "flattened-in block type %q conflicts with %s", blockS.Type, existingName)
 				}
+				if existingName, exists := blockLabels[blockS.Type]; exists {
+					return nil, schemaErrorf(field.FullName(), "flattened-in block type %q conflicts with block label name declared by %s", blockS.Type, existingName)
+				}
 				ret.Blocks = append(ret.Blocks, blockS)
 				blockTypes[blockS.Type] = field.FullName()
 			}
 
 		case FieldBlockLabel:
-			// We don't care about labels when we're dealing with bodies. That's
-			// relevent only for nested message types in blockTypeSchema.
-			continue
+			// While we're dealing with bodies we only care that the label
+			// names don't collide with other declarations. We actually handle
+			// the labels only in blockTypeSchema, for nested message types.
+			if existingName, exists := attrs[elem.Name]; exists {
+				return nil, schemaErrorf(field.FullName(), "block label name %q conflicts with attribute declared by %s", elem.Name, existingName)
+			}
+			if existingName, exists := blockTypes[elem.Name]; exists {
+				return nil, schemaErrorf(field.FullName(), "block label name %q conflicts with %s", elem.Name, existingName)
+			}
+			if existingName, exists := blockLabels[elem.Name]; exists {
+				return nil, schemaErrorf(field.FullName(), "block label name %q conflicts %s", elem.Name, existingName)
+			}
+			blockLabels[elem.Name] = field.FullName()
 
 		default:
 			// Otherwise this field isn't relevant to HCL at all, and we'll

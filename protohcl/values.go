@@ -79,8 +79,13 @@ func buildObjectValueAttrsForMessage(msg protoreflect.Message, path cty.Path, at
 			return schemaErrorf(field.FullName(), "can't convert nested block types to object fields yet")
 
 		case FieldFlattened:
-			// TODO: Implement
-			return schemaErrorf(field.FullName(), "can't handle flattened messages in object conversion yet")
+			// For flattened we'll keep writing into the same map, but we'll
+			// use the nested message as the source instead.
+			nestedMsg := msg.Get(field).Message()
+			err := buildObjectValueAttrsForMessage(nestedMsg, path, attrs)
+			if err != nil {
+				return err
+			}
 
 		case FieldBlockLabel:
 			// TODO: Implement

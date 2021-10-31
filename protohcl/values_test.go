@@ -157,6 +157,23 @@ func TestObjectValueForMessage(t *testing.T) {
 			cty.NilVal,
 			`invalid encoding of dynamic value as bytes: failed to read dynamic type descriptor key: invalid character 'i'`,
 		},
+		"flattened nested messages": {
+			&testschema.WithNestedFlattenStringAttr{
+				Base: &testschema.WithFlattenStringAttr{
+					Base: &testschema.WithStringAttr{
+						Name: "Jackson",
+					},
+					Species: "dog",
+				},
+				Breed: "pitbull",
+			},
+			cty.ObjectVal(map[string]cty.Value{
+				"name":    cty.StringVal("Jackson"),
+				"species": cty.StringVal("dog"),
+				"breed":   cty.StringVal("pitbull"),
+			}),
+			``,
+		},
 	}
 
 	for name, test := range tests {

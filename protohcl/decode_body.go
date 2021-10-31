@@ -211,6 +211,16 @@ func fillMessageFromContent(content *hcl.BodyContent, missingRange hcl.Range, ms
 					msg.Set(field, protoreflect.ValueOfMessage(nestedMsg))
 				}
 			}
+
+		case FieldFlattened:
+			// For a "flattened" message we keep working with the same
+			// hcl.BodyContent but we must start a new message with the
+			// child descriptor.
+			msg.Clear(field)
+			nestedMsg := newMessageMaybeDynamic(elem.Nested)
+			moreDiags := fillMessageFromContent(content, missingRange, nestedMsg, ctx, recovering)
+			diags = append(diags, moreDiags...)
+			msg.Set(field, protoreflect.ValueOfMessage(nestedMsg))
 		}
 	}
 

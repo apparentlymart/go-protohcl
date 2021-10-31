@@ -20,6 +20,8 @@ func TestDecodeBody(t *testing.T) {
 	simpleRawRootDesc := fileDesc.Messages().ByName(protoreflect.Name("WithRawDynamicAttr"))
 	withNestedBlockNoLabelsSingletonDesc := fileDesc.Messages().ByName(protoreflect.Name("WithNestedBlockNoLabelsSingleton"))
 	withNestedBlockOneLabelSingletonDesc := fileDesc.Messages().ByName(protoreflect.Name("WithNestedBlockOneLabelSingleton"))
+	withFlattenStringAttrDesc := fileDesc.Messages().ByName(protoreflect.Name("WithFlattenStringAttr"))
+	withNestedFlattenStringAttrDesc := fileDesc.Messages().ByName(protoreflect.Name("WithNestedFlattenStringAttr"))
 
 	tests := map[string]struct {
 		config    string
@@ -188,6 +190,40 @@ func TestDecodeBody(t *testing.T) {
 					Name:     "Jackson",
 					Nickname: "doofus",
 				},
+			},
+			nil,
+		},
+		"flattened message with string attribute": {
+			`
+				name    = "Joey"
+				species = "budgerigar"
+			`,
+			withFlattenStringAttrDesc,
+			nil,
+			&testschema.WithFlattenStringAttr{
+				Base: &testschema.WithStringAttr{
+					Name: "Joey",
+				},
+				Species: "budgerigar",
+			},
+			nil,
+		},
+		"flattened message with nested flattened message": {
+			`
+				name    = "Snakob"
+				species = "snake"
+				breed   = "ball"
+			`,
+			withNestedFlattenStringAttrDesc,
+			nil,
+			&testschema.WithNestedFlattenStringAttr{
+				Base: &testschema.WithFlattenStringAttr{
+					Base: &testschema.WithStringAttr{
+						Name: "Snakob",
+					},
+					Species: "snake",
+				},
+				Breed: "ball",
 			},
 			nil,
 		},

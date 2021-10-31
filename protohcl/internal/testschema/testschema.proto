@@ -44,6 +44,17 @@ message WithRawDynamicAttr {
   ];
 }
 
+message WithFlattenStringAttr {
+  WithStringAttr base = 1 [ (hcl.flatten) = true ];
+  string species = 2
+      [ (hcl.attr).name = "species", (hcl.attr).type = "string" ];
+}
+
+message WithNestedFlattenStringAttr {
+  WithFlattenStringAttr base = 1 [ (hcl.flatten) = true ];
+  string breed = 3 [ (hcl.attr).name = "breed", (hcl.attr).type = "string" ];
+}
+
 message WithNestedBlockNoLabelsSingleton {
   // A nested block type no labels
   WithStringAttr doodad = 1 [ (hcl.block).type_name = "doodad" ];

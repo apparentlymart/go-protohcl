@@ -77,8 +77,61 @@ func buildObjectValueAttrsForMessage(msg protoreflect.Message, path cty.Path, at
 			attrs[elem.Name] = v
 
 		case FieldNestedBlockType:
-			// TODO: Implement
-			return schemaErrorf(field.FullName(), "can't convert nested block types to object fields yet")
+			path := append(path, cty.GetAttrStep{Name: elem.TypeName})
+
+			if elem.CollectionKind == protohclext.NestedBlock_AUTO {
+				// "AUTO" here really means singleton
+				nestedMsg := msg.Get(field).Message()
+				nestedObj, err := objectValueForMessage(nestedMsg, path)
+				if err != nil {
+					return err
+				}
+				attrs[elem.TypeName] = nestedObj
+				continue
+			}
+
+			// All of the other kinds call for us to build a slice of
+			// elems.
+			var elems []cty.Value
+			msgList := msg.Get(field).List()
+			if listLen := msgList.Len(); listLen > 0 {
+				elems = make([]cty.Value, listLen)
+				for i := range elems {
+					nestedMsg := msgList.Get(i).Message()
+					nestedObj, err := objectValueForMessage(nestedMsg, path)
+					if err != nil {
+						return err
+					}
+					elems[i] = nestedObj
+				}
+			}
+
+			switch elem.CollectionKind {
+			case protohclext.NestedBlock_TUPLE:
+				attrs[elem.TypeName] = cty.TupleVal(elems)
+			case protohclext.NestedBlock_LIST:
+				if len(elems) == 0 {
+					nestedTy, err := ObjectTypeConstraintForMessageDesc(field.Message())
+					if err != nil {
+						return err
+					}
+					attrs[elem.TypeName] = cty.ListValEmpty(nestedTy)
+				} else {
+					attrs[elem.TypeName] = cty.ListVal(elems)
+				}
+			case protohclext.NestedBlock_SET:
+				if len(elems) == 0 {
+					nestedTy, err := ObjectTypeConstraintForMessageDesc(field.Message())
+					if err != nil {
+						return err
+					}
+					attrs[elem.TypeName] = cty.SetValEmpty(nestedTy)
+				} else {
+					attrs[elem.TypeName] = cty.SetVal(elems)
+				}
+			default:
+				return schemaErrorf(field.FullName(), "unsupported collection kind %s", elem.CollectionKind)
+			}
 
 		case FieldFlattened:
 			// For flattened we'll keep writing into the same map, but we'll

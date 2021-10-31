@@ -199,6 +199,132 @@ func TestObjectValueForMessage(t *testing.T) {
 			}),
 			``,
 		},
+		"nested block singleton with no labels": {
+			&testschema.WithNestedBlockNoLabelsSingleton{
+				Doodad: &testschema.WithStringAttr{
+					Name: "Joey",
+				},
+			},
+			cty.ObjectVal(map[string]cty.Value{
+				"doodad": cty.ObjectVal(map[string]cty.Value{
+					"name": cty.StringVal("Joey"),
+				}),
+			}),
+			``,
+		},
+		"nested block singleton with one label": {
+			&testschema.WithNestedBlockOneLabelSingleton{
+				Doodad: &testschema.WithOneBlockLabel{
+					Name:     "Snakob",
+					Nickname: "Snekob",
+				},
+			},
+			cty.ObjectVal(map[string]cty.Value{
+				"doodad": cty.ObjectVal(map[string]cty.Value{
+					"name":     cty.StringVal("Snakob"),
+					"nickname": cty.StringVal("Snekob"),
+				}),
+			}),
+			``,
+		},
+		"nested block singleton with two labels": {
+			&testschema.WithNestedBlockTwoLabelSingleton{
+				Doodad: &testschema.WithTwoBlockLabels{
+					Type:     "snake",
+					Name:     "Snakob",
+					Nickname: "Snekob",
+				},
+			},
+			cty.ObjectVal(map[string]cty.Value{
+				"doodad": cty.ObjectVal(map[string]cty.Value{
+					"type":     cty.StringVal("snake"),
+					"name":     cty.StringVal("Snakob"),
+					"nickname": cty.StringVal("Snekob"),
+				}),
+			}),
+			``,
+		},
+		"nested block repeated set with no labels": {
+			&testschema.WithNestedBlockNoLabelsRepeated{
+				Doodad: []*testschema.WithStringAttr{
+					{Name: "Jackson"},
+					{Name: "Joey"},
+					{Name: "Agnes"},
+					{Name: "Jackson"},
+				},
+			},
+			cty.ObjectVal(map[string]cty.Value{
+				"doodad": cty.SetVal([]cty.Value{
+					cty.ObjectVal(map[string]cty.Value{
+						"name": cty.StringVal("Agnes"),
+					}),
+					// NOTE: The other "Jackson" vanishes because
+					// this block uses a set as its value kind.
+					cty.ObjectVal(map[string]cty.Value{
+						"name": cty.StringVal("Jackson"),
+					}),
+					cty.ObjectVal(map[string]cty.Value{
+						"name": cty.StringVal("Joey"),
+					}),
+				}),
+			}),
+			``,
+		},
+		"nested block repeated list with one label": {
+			&testschema.WithNestedBlockOneLabelRepeated{
+				Doodad: []*testschema.WithOneBlockLabel{
+					{Name: "Snakob", Nickname: "Snekob"},
+					{Name: "Jackson", Nickname: "doofus"},
+					{Name: "Jackson", Nickname: "doofus"},
+				},
+			},
+			cty.ObjectVal(map[string]cty.Value{
+				"doodad": cty.ListVal([]cty.Value{
+					cty.ObjectVal(map[string]cty.Value{
+						"name":     cty.StringVal("Snakob"),
+						"nickname": cty.StringVal("Snekob"),
+					}),
+					cty.ObjectVal(map[string]cty.Value{
+						"name":     cty.StringVal("Jackson"),
+						"nickname": cty.StringVal("doofus"),
+					}),
+					cty.ObjectVal(map[string]cty.Value{
+						"name":     cty.StringVal("Jackson"),
+						"nickname": cty.StringVal("doofus"),
+					}),
+				}),
+			}),
+			``,
+		},
+		"nested block repeated list with two labels": {
+			&testschema.WithNestedBlockTwoLabelRepeated{
+				Doodad: []*testschema.WithTwoBlockLabels{
+					{Type: "snake", Name: "Snakob", Nickname: "Snekob"},
+					{Type: "dog", Name: "Jackson", Nickname: "doofus"},
+					{Type: "dog", Name: "Jackson", Nickname: "doofus"},
+				},
+			},
+			cty.ObjectVal(map[string]cty.Value{
+				"doodad": cty.TupleVal([]cty.Value{
+					cty.ObjectVal(map[string]cty.Value{
+						"type":     cty.StringVal("snake"),
+						"name":     cty.StringVal("Snakob"),
+						"nickname": cty.StringVal("Snekob"),
+					}),
+					cty.ObjectVal(map[string]cty.Value{
+						"type":     cty.StringVal("dog"),
+						"name":     cty.StringVal("Jackson"),
+						"nickname": cty.StringVal("doofus"),
+					}),
+					cty.ObjectVal(map[string]cty.Value{
+						"type":     cty.StringVal("dog"),
+						"name":     cty.StringVal("Jackson"),
+						"nickname": cty.StringVal("doofus"),
+					}),
+				}),
+			}),
+			``,
+		},
 	}
 
 	for name, test := range tests {

@@ -174,6 +174,30 @@ func TestObjectValueForMessage(t *testing.T) {
 			}),
 			``,
 		},
+		"block message with one label": {
+			&testschema.WithOneBlockLabel{
+				Name:     "Jackson",
+				Nickname: "doofus",
+			},
+			cty.ObjectVal(map[string]cty.Value{
+				"name":     cty.StringVal("Jackson"),
+				"nickname": cty.StringVal("doofus"),
+			}),
+			``,
+		},
+		"block message with two labels": {
+			&testschema.WithTwoBlockLabels{
+				Type:     "dog",
+				Name:     "Jackson",
+				Nickname: "doofus",
+			},
+			cty.ObjectVal(map[string]cty.Value{
+				"name":     cty.StringVal("Jackson"),
+				"type":     cty.StringVal("dog"),
+				"nickname": cty.StringVal("doofus"),
+			}),
+			``,
+		},
 	}
 
 	for name, test := range tests {

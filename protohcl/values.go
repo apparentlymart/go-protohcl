@@ -88,8 +88,13 @@ func buildObjectValueAttrsForMessage(msg protoreflect.Message, path cty.Path, at
 			}
 
 		case FieldBlockLabel:
-			// TODO: Implement
-			return schemaErrorf(field.FullName(), "can't handle block labels in object conversion yet")
+			// A block label should always be a singleton string, or else the
+			// schema is invalid.
+			labelVal, ok := msg.Get(field).Interface().(string)
+			if !ok {
+				return schemaErrorf(field.FullName(), "only string fields can be used for block labels")
+			}
+			attrs[elem.Name] = cty.StringVal(labelVal)
 		}
 	}
 

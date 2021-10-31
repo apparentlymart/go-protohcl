@@ -44,6 +44,19 @@ message WithRawDynamicAttr {
   ];
 }
 
+message WithNumberAttrAsInt32 {
+  // Here the protobuf type has a narrower range than the HCL type, so
+  // protohcl must apply additional validation rules.
+  int32 num = 1 [ (hcl.attr).name = "num", (hcl.attr).type = "number" ];
+}
+
+message WithNumberAttrAsString {
+  // This is an example of the HCL type disagreeing with the proto type in
+  // a valid way, because it can be resolved by an extra round of type
+  // conversion.
+  string num = 1 [ (hcl.attr).name = "num", (hcl.attr).type = "number" ];
+}
+
 message WithFlattenStringAttr {
   WithStringAttr base = 1 [ (hcl.flatten) = true ];
   string species = 2

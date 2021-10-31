@@ -22,6 +22,8 @@ func TestDecodeBody(t *testing.T) {
 	withNestedBlockOneLabelSingletonDesc := fileDesc.Messages().ByName(protoreflect.Name("WithNestedBlockOneLabelSingleton"))
 	withFlattenStringAttrDesc := fileDesc.Messages().ByName(protoreflect.Name("WithFlattenStringAttr"))
 	withNestedFlattenStringAttrDesc := fileDesc.Messages().ByName(protoreflect.Name("WithNestedFlattenStringAttr"))
+	withNumberAttrAsInt32Desc := fileDesc.Messages().ByName(protoreflect.Name("WithNumberAttrAsInt32"))
+	withNumberAttrAsStringDesc := fileDesc.Messages().ByName(protoreflect.Name("WithNumberAttrAsString"))
 
 	tests := map[string]struct {
 		config    string
@@ -66,6 +68,71 @@ func TestDecodeBody(t *testing.T) {
 			simpleRootDesc,
 			nil,
 			&testschema.WithStringAttr{},
+			nil,
+		},
+		"number attribute as int32": {
+			`
+				num = 64
+			`,
+			withNumberAttrAsInt32Desc,
+			nil,
+			&testschema.WithNumberAttrAsInt32{
+				Num: 64,
+			},
+			nil,
+		},
+		"number attribute as int32 invalid fraction": {
+			`
+				num = 3.14159265358979323846264338327950288419716939937510582097494459
+			`,
+			withNumberAttrAsInt32Desc,
+			nil,
+			&testschema.WithNumberAttrAsInt32{},
+			hcl.Diagnostics{
+				{
+					Severity: hcl.DiagError,
+					Summary:  "Unsuitable attribute value",
+					Detail:   "The value must be a whole number.",
+					Subject: &hcl.Range{
+						Filename: "test.tf",
+						Start:    hcl.Pos{Line: 2, Column: 11, Byte: 11},
+						End:      hcl.Pos{Line: 2, Column: 75, Byte: 75},
+					},
+				},
+			},
+		},
+		"number attribute as int32 out of range": {
+			`
+				num = 314159265358979323846264338327950288419716939937510582097494459
+			`,
+			withNumberAttrAsInt32Desc,
+			nil,
+			&testschema.WithNumberAttrAsInt32{},
+			hcl.Diagnostics{
+				{
+					Severity: hcl.DiagError,
+					Summary:  "Unsuitable attribute value",
+					Detail:   "The value must be less than or equal to 2147483647.",
+					Subject: &hcl.Range{
+						Filename: "test.tf",
+						Start:    hcl.Pos{Line: 2, Column: 11, Byte: 11},
+						End:      hcl.Pos{Line: 2, Column: 74, Byte: 74},
+					},
+				},
+			},
+		},
+		"number attribute as string": {
+			`
+				num = 3.14159265358979323846264338327950288419716939937510582097494459
+			`,
+			withNumberAttrAsStringDesc,
+			nil,
+			&testschema.WithNumberAttrAsString{
+				// We can preserve a decimal representation of the full
+				// precision of the input, because we're not lowering to any
+				// particular protobuf numeric type here.
+				Num: "3.14159265358979323846264338327950288419716939937510582097494459",
+			},
 			nil,
 		},
 		"raw dynamic attribute as string": {

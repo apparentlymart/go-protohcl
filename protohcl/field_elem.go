@@ -51,6 +51,7 @@ func GetFieldElem(field protoreflect.FieldDescriptor) (FieldElem, error) {
 			Required:       attrOpts.Required,
 			TypeExprString: attrOpts.Type,
 			RawMode:        attrOpts.Raw,
+			TargetField:    field,
 		}, nil
 
 	case blockOpts != nil && blockOpts.TypeName != "":
@@ -63,10 +64,19 @@ func GetFieldElem(field protoreflect.FieldDescriptor) (FieldElem, error) {
 		if field.Kind() != protoreflect.MessageKind {
 			return nil, schemaErrorf(field.FullName(), "field representing nested block must have message type, not %s", field.Kind())
 		}
+		if field.IsMap() {
+			// Maybe we'll support this later, perhaps by just adding a
+			// synthetic extra block label for the map key? Will wait to see
+			// whether there's a strong need to do that first, because callers
+			// can get a similar effect by collecting up block messages by
+			// the labels themselves.
+			return nil, schemaErrorf(field.FullName(), "field representing nested block must not be a map")
+		}
 
 		return FieldNestedBlockType{
 			TypeName: blockOpts.TypeName,
 			Nested:   field.Message(),
+			Repeated: field.IsList(),
 		}, nil
 
 	case flatten:
@@ -75,6 +85,9 @@ func GetFieldElem(field protoreflect.FieldDescriptor) (FieldElem, error) {
 		}
 		if field.Kind() != protoreflect.MessageKind {
 			return nil, schemaErrorf(field.FullName(), "field to be flattened must have message type, not %s", field.Kind())
+		}
+		if field.Cardinality() == protoreflect.Repeated {
+			return nil, schemaErrorf(field.FullName(), "field to be flattened must not be 'repeated'")
 		}
 
 		return FieldFlattened{
@@ -110,6 +123,8 @@ type FieldAttribute struct {
 
 	TypeExprString string
 	RawMode        protohclext.Attribute_RawMode
+
+	TargetField protoreflect.FieldDescriptor
 }
 
 // TypeConstraint attempts to interpret field TypeExprString as an HCL type
@@ -119,6 +134,14 @@ type FieldAttribute struct {
 // If the field doesn't contain a valid type constraint expression then
 // TypeConstraint returns error diagnostics and an invalid type.
 func (fa FieldAttribute) TypeConstraint() (cty.Type, hcl.Diagnostics) {
+	if fa.TypeExprString == "" {
+		ty, err := fa.autoTypeConstraint()
+		if err != nil {
+			return cty.DynamicPseudoType, hcl.Diagnostics{schemaErrorDiagnostic(err)}
+		}
+		return ty, nil
+	}
+
 	expr, diags := hclsyntax.ParseExpression([]byte(fa.TypeExprString), "", hcl.InitialPos)
 	if diags.HasErrors() {
 		return cty.DynamicPseudoType, diags
@@ -129,11 +152,21 @@ func (fa FieldAttribute) TypeConstraint() (cty.Type, hcl.Diagnostics) {
 	return ty, diags
 }
 
+func (fa FieldAttribute) autoTypeConstraint() (cty.Type, error) {
+	if fa.RawMode != protohclext.Attribute_NOT_RAW {
+		return cty.DynamicPseudoType, schemaErrorf(fa.TargetField.FullName(), "must set explicit HCL type constraint for this raw-mode attribute")
+	}
+
+	// TODO: Implement a reasonable ruleset here for automatic type selection
+	return cty.DynamicPseudoType, schemaErrorf(fa.TargetField.FullName(), "automatic type constraints not yet implemented; specify an explicit type constraint")
+}
+
 func (fa FieldAttribute) fieldElem() {}
 
 type FieldNestedBlockType struct {
 	TypeName string
 	Nested   protoreflect.MessageDescriptor
+	Repeated bool
 }
 
 func (fa FieldNestedBlockType) fieldElem() {}

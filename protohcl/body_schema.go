@@ -10,6 +10,22 @@ import (
 // bodySchema constucts a HCL body schema from the given message descriptor,
 // or returns an error explaining why the descriptor is invalid for HCL use.
 func bodySchema(desc protoreflect.MessageDescriptor) (*hcl.BodySchema, error) {
+	// For the moment we don't allow "oneofs" at all, except for the synthetic
+	// ones used to represent nullable fields, because we don't yet have the
+	// logic to return an error if the input configuration tries to populate
+	// more than one oneof field at a time.
+	// TODO: Implement that extra validation logic in the body decoder, and
+	// then we can remove this restriction. When we do, we may wish to allow
+	// annotating oneofs with an HCL-specific "required", because proto oneofs
+	// are really "zero or one of" but in HCL we commonly want to require
+	// exactly one of a set of possibilities.
+	for i := 0; i < desc.Oneofs().Len(); i++ {
+		oneOf := desc.Oneofs().Get(i)
+		if !oneOf.IsSynthetic() {
+			return nil, schemaErrorf(oneOf.FullName(), "oneof declarations are not yet supported in messages used for HCL decoding")
+		}
+	}
+
 	ret := hcl.BodySchema{}
 	// We'll also track which names we've used already, so we can detect
 	// and report conflicts.

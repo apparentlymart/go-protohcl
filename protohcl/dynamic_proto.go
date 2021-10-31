@@ -42,7 +42,7 @@ func NewDynamicProto(descs *descriptorpb.FileDescriptorSet) (DynamicProto, error
 // DecodeBody decodes the content of a given HCL body into a protobuf message
 // conforming to the descriptor of the given named message type in the
 // dynamically-loaded schema.
-func (dp DynamicProto) DecodeBody(body hcl.Body, msgName protoreflect.FullName) (proto.Message, hcl.Diagnostics) {
+func (dp DynamicProto) DecodeBody(body hcl.Body, msgName protoreflect.FullName, ctx *hcl.EvalContext) (proto.Message, hcl.Diagnostics) {
 	var diags hcl.Diagnostics
 
 	desc, err := dp.GetMessageDesc(msgName)
@@ -55,7 +55,7 @@ func (dp DynamicProto) DecodeBody(body hcl.Body, msgName protoreflect.FullName) 
 		return nil, diags
 	}
 
-	return DecodeBody(body, desc)
+	return DecodeBody(body, desc, ctx)
 }
 
 // GetMessageDesc tries to find a message descriptor of the given name in the

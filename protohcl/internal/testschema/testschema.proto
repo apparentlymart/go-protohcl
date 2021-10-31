@@ -29,3 +29,13 @@ message MoreRoot {
   // has a different name from HCL's perspective.
   Thing other_thing = 2 [ (hcl.block).type_name = "other_thing" ];
 }
+
+message SimpleRoot {
+  // Name represents an HCL attribute
+  string name = 1 [ (hcl.attr).name = "name", (hcl.attr).type = "string" ];
+}
+
+message SimpleRawRoot {
+  // Name represents an HCL attribute
+  bytes raw = 1 [ (hcl.attr).name = "raw", (hcl.attr).type = "any", (hcl.attr).raw = JSON ];
+}

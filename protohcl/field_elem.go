@@ -102,9 +102,9 @@ func GetFieldElem(field protoreflect.FieldDescriptor) (FieldElem, error) {
 		collectionKind := blockOpts.Kind
 		if field.IsList() {
 			if collectionKind == protohclext.NestedBlock_AUTO {
-				collectionKind = protohclext.NestedBlock_SEQ
+				collectionKind = protohclext.NestedBlock_TUPLE
 			}
-			if collectionKind != protohclext.NestedBlock_SEQ && collectionKind != protohclext.NestedBlock_SET {
+			if collectionKind != protohclext.NestedBlock_TUPLE && collectionKind != protohclext.NestedBlock_LIST && collectionKind != protohclext.NestedBlock_SET {
 				return nil, schemaErrorf(field.FullName(), "unsupported collection kind %s", collectionKind)
 			}
 		} else {

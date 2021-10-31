@@ -106,6 +106,62 @@ func TestObjectTypeConstraintForMessageDesc(t *testing.T) {
 			}),
 			``,
 		},
+		{
+			"WithNestedBlockNoLabelsSingleton",
+			cty.Object(map[string]cty.Type{
+				"doodad": cty.Object(map[string]cty.Type{
+					"name": cty.String,
+				}),
+			}),
+			``,
+		},
+		{
+			"WithNestedBlockOneLabelSingleton",
+			cty.Object(map[string]cty.Type{
+				"doodad": cty.Object(map[string]cty.Type{
+					"name":     cty.String,
+					"nickname": cty.String,
+				}),
+			}),
+			``,
+		},
+		{
+			"WithNestedBlockTwoLabelSingleton",
+			cty.Object(map[string]cty.Type{
+				"doodad": cty.Object(map[string]cty.Type{
+					"type":     cty.String,
+					"name":     cty.String,
+					"nickname": cty.String,
+				}),
+			}),
+			``,
+		},
+		{
+			"WithNestedBlockNoLabelsRepeated",
+			cty.Object(map[string]cty.Type{
+				"doodad": cty.Set(cty.Object(map[string]cty.Type{
+					"name": cty.String,
+				})),
+			}),
+			``,
+		},
+		{
+			"WithNestedBlockOneLabelRepeated",
+			cty.Object(map[string]cty.Type{
+				"doodad": cty.List(cty.Object(map[string]cty.Type{
+					"name":     cty.String,
+					"nickname": cty.String,
+				})),
+			}),
+			``,
+		},
+		{
+			"WithNestedBlockTwoLabelRepeated",
+			cty.Object(map[string]cty.Type{
+				"doodad": cty.DynamicPseudoType, // tuple type chosen dynamically
+			}),
+			``,
+		},
 	}
 
 	for _, test := range tests {

@@ -100,7 +100,7 @@ message WithNestedBlockNoLabelsSingleton {
 
 message WithNestedBlockOneLabelSingleton {
   // A nested block type with one label
-  WithOneBlockLabel doodad = 1 [ (hcl.block).type_name = "doodad" ];
+  WithOneBlockLabel doodad = 1 [ (hcl.block).type_name = "doodad"];
 }
 
 message WithNestedBlockTwoLabelSingleton {
@@ -110,12 +110,12 @@ message WithNestedBlockTwoLabelSingleton {
 
 message WithNestedBlockNoLabelsRepeated {
   // A nested block type no labels
-  repeated WithStringAttr doodad = 1 [ (hcl.block).type_name = "doodad" ];
+  repeated WithStringAttr doodad = 1 [ (hcl.block).type_name = "doodad", (hcl.block).kind = SET ];
 }
 
 message WithNestedBlockOneLabelRepeated {
   // A nested block type with one label
-  repeated WithOneBlockLabel doodad = 1 [ (hcl.block).type_name = "doodad" ];
+  repeated WithOneBlockLabel doodad = 1 [ (hcl.block).type_name = "doodad", (hcl.block).kind = LIST ];
 }
 
 message WithNestedBlockTwoLabelRepeated {

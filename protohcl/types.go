@@ -3,6 +3,7 @@ package protohcl
 import (
 	"fmt"
 
+	"github.com/apparentlymart/go-protohcl/protohcl/protohclext"
 	"github.com/zclconf/go-cty/cty"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -51,8 +52,36 @@ func buildObjectTypeAtysForMessageDesc(desc protoreflect.MessageDescriptor, atys
 			atys[elem.Name] = aty
 
 		case FieldNestedBlockType:
-			// TODO: Implement
-			return schemaErrorf(field.FullName(), "can't convert nested block types to object fields yet")
+			nestedTy, err := ObjectTypeConstraintForMessageDesc(elem.Nested)
+			if err != nil {
+				return err
+			}
+			switch elem.CollectionKind {
+			case protohclext.NestedBlock_AUTO:
+				// AUTO always indicates single mode in the GetFieldElem
+				// response, so we'll just pass through the nested message type.
+				atys[elem.TypeName] = nestedTy
+
+			case protohclext.NestedBlock_TUPLE:
+				// We won't know the actual tuple type until we have a real
+				// value to choose it from.
+				atys[elem.TypeName] = cty.DynamicPseudoType
+
+			case protohclext.NestedBlock_LIST:
+				if nestedTy.HasDynamicTypes() {
+					return schemaErrorf(field.FullName(), "can't use (hcl.block).kind = LIST with a block type containing an attribute with an 'any' constraint")
+				}
+				atys[elem.TypeName] = cty.List(nestedTy)
+
+			case protohclext.NestedBlock_SET:
+				if nestedTy.HasDynamicTypes() {
+					return schemaErrorf(field.FullName(), "can't use (hcl.block).kind = SET with a block type containing an attribute with an 'any' constraint")
+				}
+				atys[elem.TypeName] = cty.Set(nestedTy)
+
+			default:
+				return schemaErrorf(field.FullName(), "unsupported block collection kind %s", elem.CollectionKind)
+			}
 
 		case FieldFlattened:
 			// For flattened we'll keep writing into the same map, but we'll

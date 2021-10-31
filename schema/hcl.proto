@@ -101,18 +101,22 @@ message NestedBlock {
     // This is the only valid mode for non-repeated fields, and just passes
     // through the inner message directly as an object value.
     //
-    // For "repeated" fields, AUTO is the same as SEQ.
+    // For "repeated" fields, AUTO is the same as TUPLE.
     AUTO = 0;
 
-    // SEQ selects sequence mode, which produces either a list- or tuple-typed
-    // value depending on whether the nested message type calls for "any"
-    // type constraints which might therefore cause each element to have its
-    // own distinct type.
-    SEQ = 1;
+    // TUPLE selects tuple mode, which produces a tuple-typed value with element
+    // types chosen dynamically at decoding time. This is the only mode that
+    // allows each element to have a distinct concrete type, in cases where
+    // the type constraint includes "any" placeholders.
+    TUPLE = 1;
+
+    // LIST selects list mode, which requires an exact element type and so is
+    // valid only for nested blocks that have no "any" type constraints within.
+    LIST = 2;
 
     // SET selects set mode, which requires an exact element type, and so it is
     // valid only for nested blocks that have no "any" type constraints within.
-    SET = 2;
+    SET = 3;
   }
   // For repeated fields representing nested block types, use set kind to
   // control what kind of collection ObjectValueForMessage will use to

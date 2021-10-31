@@ -1,6 +1,8 @@
 package protohcl
 
 import (
+	"fmt"
+
 	"github.com/apparentlymart/go-protohcl/protohcl/protohclext"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/convert"
@@ -95,6 +97,9 @@ func buildObjectValueAttrsForMessage(msg protoreflect.Message, path cty.Path, at
 				return schemaErrorf(field.FullName(), "only string fields can be used for block labels")
 			}
 			attrs[elem.Name] = cty.StringVal(labelVal)
+
+		default:
+			panic(fmt.Sprintf("unhandled field element type %T", elem))
 		}
 	}
 

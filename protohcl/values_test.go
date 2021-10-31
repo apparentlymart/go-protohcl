@@ -7,6 +7,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/zclconf/go-cty-debug/ctydebug"
 	"github.com/zclconf/go-cty/cty"
+	"github.com/zclconf/go-cty/cty/convert"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -219,7 +220,21 @@ func TestObjectValueForMessage(t *testing.T) {
 			}
 
 			if diff := cmp.Diff(got, test.want, ctydebug.CmpOptions); diff != "" {
-				t.Errorf("wrong result\n%s", diff)
+				t.Fatalf("wrong result\n%s", diff)
+			}
+
+			msgDesc := test.msg.ProtoReflect().Descriptor()
+			wantTy, err := ObjectTypeConstraintForMessageDesc(msgDesc)
+			if err != nil {
+				t.Fatalf("value conversion succeeded, but type conversion failed: %s", err)
+			}
+			if errs := got.Type().TestConformance(wantTy); len(errs) != 0 {
+				t.Fatalf("value doesn't conform to expected type\n%s", errs)
+			}
+			if convVal, err := convert.Convert(got, wantTy); err != nil {
+				t.Fatalf("value can't convert to the message descriptor's type constraint: %s", err)
+			} else if gotType, wantType := convVal.Type(), got.Type(); !wantType.Equals(gotType) {
+				t.Fatalf("result type changed under conversion to its type constraint\noriginal type: %s\nnew type:     %s", wantType, gotType)
 			}
 		})
 	}

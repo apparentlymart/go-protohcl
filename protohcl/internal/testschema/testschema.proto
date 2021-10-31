@@ -37,7 +37,11 @@ message WithStringAttr {
 
 message WithRawDynamicAttr {
   // Name represents an HCL attribute
-  bytes raw = 1 [ (hcl.attr).name = "raw", (hcl.attr).type = "any", (hcl.attr).raw = JSON ];
+  bytes raw = 1 [
+    (hcl.attr).name = "raw",
+    (hcl.attr).type = "any",
+    (hcl.attr).raw = JSON
+  ];
 }
 
 message WithNestedBlockNoLabelsSingleton {
@@ -75,7 +79,8 @@ message WithOneBlockLabel {
   string name = 1 [ (hcl.label).name = "name" ];
 
   // Another field in case we also want to test attribute decoding
-  string nickname = 2 [ (hcl.attr).name = "nickname", (hcl.attr).type = "string" ];
+  string nickname = 2
+      [ (hcl.attr).name = "nickname", (hcl.attr).type = "string" ];
 }
 
 message WithTwoBlockLabels {
@@ -83,5 +88,6 @@ message WithTwoBlockLabels {
   string name = 2 [ (hcl.label).name = "name" ];
 
   // Another field in case we also want to test attribute decoding
-  string nickname = 3 [ (hcl.attr).name = "nickname", (hcl.attr).type = "string" ];
+  string nickname = 3
+      [ (hcl.attr).name = "nickname", (hcl.attr).type = "string" ];
 }

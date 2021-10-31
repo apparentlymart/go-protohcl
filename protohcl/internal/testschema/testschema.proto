@@ -39,3 +39,49 @@ message WithRawDynamicAttr {
   // Name represents an HCL attribute
   bytes raw = 1 [ (hcl.attr).name = "raw", (hcl.attr).type = "any", (hcl.attr).raw = JSON ];
 }
+
+message WithNestedBlockNoLabelsSingleton {
+  // A nested block type no labels
+  WithStringAttr doodad = 1 [ (hcl.block).type_name = "doodad" ];
+}
+
+message WithNestedBlockOneLabelSingleton {
+  // A nested block type with one label
+  WithOneBlockLabel doodad = 1 [ (hcl.block).type_name = "doodad" ];
+}
+
+message WithNestedBlockTwoLabelSingleton {
+  // A nested block type with one label
+  WithTwoBlockLabels doodad = 1 [ (hcl.block).type_name = "doodad" ];
+}
+
+message WithNestedBlockNoLabelsRepeated {
+  // A nested block type no labels
+  repeated WithStringAttr doodad = 1 [ (hcl.block).type_name = "doodad" ];
+}
+
+message WithNestedBlockOneLabelRepeated {
+  // A nested block type with one label
+  repeated WithOneBlockLabel doodad = 1 [ (hcl.block).type_name = "doodad" ];
+}
+
+message WithNestedBlockTwoLabelRepeated {
+  // A nested block type with one label
+  repeated WithTwoBlockLabels doodad = 1 [ (hcl.block).type_name = "doodad" ];
+}
+
+message WithOneBlockLabel {
+  // Single "name" label
+  string name = 1 [ (hcl.label).name = "name" ];
+
+  // Another field in case we also want to test attribute decoding
+  string nickname = 2 [ (hcl.attr).name = "nickname", (hcl.attr).type = "string" ];
+}
+
+message WithTwoBlockLabels {
+  string type = 1 [ (hcl.label).name = "type" ];
+  string name = 2 [ (hcl.label).name = "name" ];
+
+  // Another field in case we also want to test attribute decoding
+  string nickname = 3 [ (hcl.attr).name = "nickname", (hcl.attr).type = "string" ];
+}

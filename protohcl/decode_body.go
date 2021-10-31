@@ -7,7 +7,6 @@ import (
 	"github.com/zclconf/go-cty/cty/convert"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
-	"google.golang.org/protobuf/types/dynamicpb"
 )
 
 // DecodeBody decodes the content of the given body into a message that
@@ -33,11 +32,11 @@ func DecodeBody(body hcl.Body, desc protoreflect.MessageDescriptor, ctx *hcl.Eva
 	diags = append(diags, moreDiags...)
 	// Even if there were errors, we'll try a partial decode anyway.
 
-	msg := dynamicpb.NewMessage(desc)
-	moreDiags = fillMessageFromContent(content, body.MissingItemRange(), msg.ProtoReflect(), ctx, diags.HasErrors())
+	msg := newMessageMaybeDynamic(desc)
+	moreDiags = fillMessageFromContent(content, body.MissingItemRange(), msg, ctx, diags.HasErrors())
 	diags = append(diags, moreDiags...)
 
-	return msg, diags
+	return msg.Interface(), diags
 }
 
 func fillMessageFromContent(content *hcl.BodyContent, missingRange hcl.Range, msg protoreflect.Message, ctx *hcl.EvalContext, recovering bool) hcl.Diagnostics {
@@ -167,8 +166,77 @@ func fillMessageFromContent(content *hcl.BodyContent, missingRange hcl.Range, ms
 			}
 
 			msg.Set(field, protoVal)
+		case FieldNestedBlockType:
+			// We'll always at least _clear_ the field, but we might then
+			// populate it with a new value below, if we can find a suitable
+			// value.
+			msg.Clear(field)
+
+			if elem.Repeated {
+				// For a repeated block type we'll write in all of the blocks
+				// of the associated type.
+				list := msg.NewField(field).List()
+				for _, block := range content.Blocks {
+					if block.Type != elem.TypeName {
+						continue
+					}
+					nestedMsg, moreDiags := newMessageForBlock(block, elem, ctx)
+					diags = append(diags, moreDiags...)
+					list.Append(protoreflect.ValueOfMessage(nestedMsg))
+				}
+			} else {
+				// For a singleton block there should be at most one block
+				// of the associated type.
+				var found *hcl.Block
+				for _, block := range content.Blocks {
+					if block.Type != elem.TypeName {
+						continue
+					}
+					if found != nil {
+						diags = append(diags, &hcl.Diagnostic{
+							Severity: hcl.DiagError,
+							Summary:  fmt.Sprintf("Duplicate %s block", elem.TypeName),
+							Detail: fmt.Sprintf(
+								"There may be no more than one %s block. Previous block declared at %s.",
+								elem.TypeName, found.DefRange.Ptr(),
+							),
+							Subject: block.TypeRange.Ptr(),
+							Context: block.DefRange.Ptr(),
+						})
+						break
+					}
+					found = block
+					nestedMsg, moreDiags := newMessageForBlock(block, elem, ctx)
+					diags = append(diags, moreDiags...)
+					msg.Set(field, protoreflect.ValueOfMessage(nestedMsg))
+				}
+			}
 		}
 	}
 
 	return diags
+}
+
+func newMessageForBlock(block *hcl.Block, elem FieldNestedBlockType, ctx *hcl.EvalContext) (protoreflect.Message, hcl.Diagnostics) {
+	var diags hcl.Diagnostics
+
+	nestedMsg, moreDiags := DecodeBody(block.Body, elem.Nested, ctx)
+	diags = append(diags, moreDiags...)
+	nestedMsgR := nestedMsg.ProtoReflect()
+
+	nestedFields := elem.Nested.Fields()
+	nextLabel := 0
+	for i := 0; i < nestedFields.Len(); i++ {
+		nestedField := nestedFields.Get(i)
+		elem, err := GetFieldElem(nestedField)
+		if err != nil {
+			continue // we handle these errors during schema construction
+		}
+		if _, ok := elem.(FieldBlockLabel); ok {
+			nestedMsgR.Set(nestedField, protoreflect.ValueOfString(block.Labels[nextLabel]))
+			nextLabel++
+		}
+	}
+
+	return nestedMsgR, diags
 }

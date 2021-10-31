@@ -9,6 +9,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/descriptorpb"
+	"google.golang.org/protobuf/types/dynamicpb"
 )
 
 type DynamicProto struct {
@@ -76,4 +77,21 @@ func (dp DynamicProto) GetMessageDesc(name protoreflect.FullName) (protoreflect.
 	}
 
 	return msgDesc, nil
+}
+
+// newMessageMaybeDynamic is a helper which always produces a new message
+// conforming to the given descriptor, but will be of a real generated Go
+// type if one is known to the global registry, or will be a totally-dynamic
+// message if not.
+func newMessageMaybeDynamic(desc protoreflect.MessageDescriptor) protoreflect.Message {
+	if msgType, err := protoregistry.GlobalTypes.FindMessageByName(desc.FullName()); err == nil {
+		// If we happen to have the target message type in the global registry
+		// then we'll use its generated Go type, if possible, to allow for
+		// more convenient direct access.
+		return msgType.New()
+	} else {
+		// Otherwise we'll use a totally-dynamic message, which has no
+		// specialized Go type backing it.
+		return dynamicpb.NewMessage(desc)
+	}
 }

@@ -138,7 +138,7 @@ func fillMessageFromContent(content *hcl.BodyContent, missingRange hcl.Range, ms
 				continue
 			}
 
-			needTy, err := valuePhysicalConstraintForFieldKind(val, field)
+			needTy, err := valuePhysicalConstraintForFieldKind(val.Type(), field)
 			if err != nil {
 				diags = diags.Append(schemaErrorDiagnostic(err))
 			}

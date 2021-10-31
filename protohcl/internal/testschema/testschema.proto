@@ -57,6 +57,31 @@ message WithNumberAttrAsString {
   string num = 1 [ (hcl.attr).name = "num", (hcl.attr).type = "number" ];
 }
 
+message WithBoolAttr {
+  // This one is also testing automatic inference that the HCL type is bool
+  // based on the field type. Those inferences won't always be correct because
+  // the type systems are not one-to-one, but it's helpful for simple cases
+  // like this.
+  bool do_the_thing = 1 [ (hcl.attr).name = "do_the_thing" ];
+}
+
+message WithStringListAttr {
+  // Automatic HCL type selection.
+  repeated string names = 1 [ (hcl.attr).name = "names" ];
+}
+
+message WithStringSetAttr {
+  // Need to override the automatic type selection, which would choose
+  // list(string).
+  repeated string names = 1
+      [ (hcl.attr).name = "names", (hcl.attr).type = "set(string)" ];
+}
+
+message WithStringMapAttr {
+  // Automatic HCL type selection.
+  map<string, string> names = 1 [ (hcl.attr).name = "names" ];
+}
+
 message WithFlattenStringAttr {
   WithStringAttr base = 1 [ (hcl.flatten) = true ];
   string species = 2

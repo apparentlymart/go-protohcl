@@ -45,6 +45,32 @@ func GetFieldElem(field protoreflect.FieldDescriptor) (FieldElem, error) {
 		if labelOpts != nil && labelOpts.Name != "" {
 			return nil, schemaErrorf(field.FullName(), "cannot be both attribute %q and block label %q", attrOpts.Name, labelOpts.Name)
 		}
+		if field.IsMap() && field.MapKey().Kind() != protoreflect.StringKind {
+			return nil, schemaErrorf(field.FullName(), "HCL only supports maps with string keys")
+		}
+		if attrOpts.Raw != protohclext.Attribute_NOT_RAW {
+			// We only allow singleton raws, because otherwise we have to deal
+			// with odd situations where the outermost collection isn't raw
+			// but the elements are, which is messy and hard to report
+			// diagnostics about when it doesn't work out. Users can still
+			// define a raw field as having an _HCL_ collection type, in which
+			// case the whole collection will be raw-packed together into a
+			// single bytes value.
+			if field.IsList() {
+				return nil, schemaErrorf(field.FullName(), "cannot use raw mode with 'repeated' field")
+			}
+			if field.IsMap() {
+				return nil, schemaErrorf(field.FullName(), "cannot use raw mode with map field")
+			}
+			if field.Kind() != protoreflect.BytesKind {
+				return nil, schemaErrorf(field.FullName(), "raw mode is allowed only for 'bytes' fields")
+			}
+			if attrOpts.Type == "" {
+				return nil, schemaErrorf(field.FullName(), "must specify (hcl.attr).type for this raw-mode field")
+			}
+		} else if field.Kind() == protoreflect.BytesKind {
+			return nil, schemaErrorf(field.FullName(), "'bytes' fields must have raw mode enabled")
+		}
 
 		return FieldAttribute{
 			Name:           attrOpts.Name,
@@ -157,8 +183,11 @@ func (fa FieldAttribute) autoTypeConstraint() (cty.Type, error) {
 		return cty.DynamicPseudoType, schemaErrorf(fa.TargetField.FullName(), "must set explicit HCL type constraint for this raw-mode attribute")
 	}
 
-	// TODO: Implement a reasonable ruleset here for automatic type selection
-	return cty.DynamicPseudoType, schemaErrorf(fa.TargetField.FullName(), "automatic type constraints not yet implemented; specify an explicit type constraint")
+	ty := autoTypeConstraintForField(fa.TargetField)
+	if ty == cty.NilType {
+		return cty.DynamicPseudoType, schemaErrorf(fa.TargetField.FullName(), "can't infer HCL type constraint for this field; must specify (hcl.attr).type option explicitly")
+	}
+	return ty, nil
 }
 
 func (fa FieldAttribute) fieldElem() {}

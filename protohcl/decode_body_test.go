@@ -22,8 +22,12 @@ func TestDecodeBody(t *testing.T) {
 	withNestedBlockOneLabelSingletonDesc := fileDesc.Messages().ByName(protoreflect.Name("WithNestedBlockOneLabelSingleton"))
 	withFlattenStringAttrDesc := fileDesc.Messages().ByName(protoreflect.Name("WithFlattenStringAttr"))
 	withNestedFlattenStringAttrDesc := fileDesc.Messages().ByName(protoreflect.Name("WithNestedFlattenStringAttr"))
+	withBoolAttrDesc := fileDesc.Messages().ByName(protoreflect.Name("WithBoolAttr"))
 	withNumberAttrAsInt32Desc := fileDesc.Messages().ByName(protoreflect.Name("WithNumberAttrAsInt32"))
 	withNumberAttrAsStringDesc := fileDesc.Messages().ByName(protoreflect.Name("WithNumberAttrAsString"))
+	withStringListAttrDesc := fileDesc.Messages().ByName(protoreflect.Name("WithStringListAttr"))
+	withStringSetAttrDesc := fileDesc.Messages().ByName(protoreflect.Name("WithStringSetAttr"))
+	withStringMapAttrDesc := fileDesc.Messages().ByName(protoreflect.Name("WithStringMapAttr"))
 
 	tests := map[string]struct {
 		config    string
@@ -132,6 +136,64 @@ func TestDecodeBody(t *testing.T) {
 				// precision of the input, because we're not lowering to any
 				// particular protobuf numeric type here.
 				Num: "3.14159265358979323846264338327950288419716939937510582097494459",
+			},
+			nil,
+		},
+		"bool attribute true": {
+			`
+				do_the_thing = true
+			`,
+			withBoolAttrDesc,
+			nil,
+			&testschema.WithBoolAttr{
+				// We can preserve a decimal representation of the full
+				// precision of the input, because we're not lowering to any
+				// particular protobuf numeric type here.
+				DoTheThing: true,
+			},
+			nil,
+		},
+		"list of strings attribute": {
+			`
+				names = ["Jackson", "Snakob", "Rufus", "Agnes", "Jackson"]
+			`,
+			withStringListAttrDesc,
+			nil,
+			&testschema.WithStringListAttr{
+				Names: []string{"Jackson", "Snakob", "Rufus", "Agnes", "Jackson"},
+			},
+			nil,
+		},
+		"set of strings attribute": {
+			`
+				names = ["Jackson", "Snakob", "Rufus", "Agnes", "Jackson"]
+			`,
+			withStringSetAttrDesc,
+			nil,
+			&testschema.WithStringSetAttr{
+				// We lose the explicit ordering and the duplicate Jackson
+				// in the conversion to set, even though the result is
+				// just a list again.
+				Names: []string{"Agnes", "Jackson", "Rufus", "Snakob"},
+			},
+			nil,
+		},
+		"map of strings attribute": {
+			`
+				names = {
+					martin  = "Jackson"
+					kristin = "Snakob"
+					kay     = "Rufus"
+				}
+			`,
+			withStringMapAttrDesc,
+			nil,
+			&testschema.WithStringMapAttr{
+				Names: map[string]string{
+					"martin":  "Jackson",
+					"kristin": "Snakob",
+					"kay":     "Rufus",
+				},
 			},
 			nil,
 		},

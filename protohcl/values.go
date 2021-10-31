@@ -98,6 +98,18 @@ func protoValueForSingletonField(val cty.Value, rng hcl.Range, msg protoreflect.
 	// By the time we get here, we know that the top-level value is known
 	// (because we checked that above) and non-null (because callers should
 	// check that before they call, and just skip setting the field if so.)
+	ret, moreDiags := protoValueForSingletonFieldKind(val, rng, msg, field)
+	diags = append(diags, moreDiags...)
+	return ret, diags
+}
+
+func protoValueForSingletonFieldKind(val cty.Value, rng hcl.Range, msg protoreflect.Message, field protoreflect.FieldDescriptor) (protoreflect.Value, hcl.Diagnostics) {
+	// This function makes its selections based only on the field's kind and
+	// not on its HCL-specific options. By the time we get here the caller
+	// should already have rejected any null or unknown values and know it's
+	// not supposed to be decoding in raw mode.
+
+	var diags hcl.Diagnostics
 
 	switch field.Kind() {
 	case protoreflect.BoolKind:
@@ -143,6 +155,7 @@ func protoValueForSingletonField(val cty.Value, rng hcl.Range, msg protoreflect.
 		// so if we get here then it's always a bug.
 		panic(fmt.Sprintf("unhandled %s for field %s", field.Kind(), field.FullName()))
 	}
+
 }
 
 func protoValueForSingletonRawField(val cty.Value, rng hcl.Range, attr FieldAttribute) (protoreflect.Value, hcl.Diagnostics) {
@@ -265,7 +278,25 @@ func protoValueForMapField(vals map[string]cty.Value, rng hcl.Range, msg protore
 	protoMap := msg.NewField(field).Map()
 
 	for k, v := range vals {
-		protoVal, moreDiags := protoValueForSingletonField(v, rng, msg, field.MapValue())
+		if !v.IsKnown() {
+			// Only raw-mode fields can accept unknown values, and we don't
+			// allow maps of raw so we can't get here in that case.
+			diags = diags.Append(&hcl.Diagnostic{
+				Severity: hcl.DiagError,
+				Summary:  unsuitableValueSummary,
+				Detail:   "Unknown values are not allowed here.",
+				Context:  rng.Ptr(), // NOTE: Non-ideal because we're reporting the overall map range, not the individual element
+			})
+			return msg.NewField(field), diags
+		}
+
+		// In protobuf a map is really just a repeated message of a special
+		// generated message type with key and value fields, so the values
+		// we're constructing here are for the value field of that hidden
+		// message type, not directly for what "field" is describing.
+		mapValField := field.MapValue()
+		mapElemMsg := newMessageMaybeDynamic(mapValField.ContainingMessage())
+		protoVal, moreDiags := protoValueForSingletonFieldKind(v, rng, mapElemMsg, mapValField)
 		diags = append(diags, moreDiags...)
 		if moreDiags.HasErrors() {
 			continue
@@ -281,66 +312,60 @@ func protoValueForMapField(vals map[string]cty.Value, rng hcl.Range, msg protore
 // on the value that will be constrained. This is mainly just to reduce the
 // number of cases that our value-to-field decoder needs to deal with, by
 // doing some basic type normalization up front.
-func valuePhysicalConstraintForFieldKind(v cty.Value, field protoreflect.FieldDescriptor) (cty.Type, error) {
+func valuePhysicalConstraintForFieldKind(ty cty.Type, field protoreflect.FieldDescriptor) (cty.Type, error) {
 	switch {
 	case field.IsList():
-		// Our per-element type constraint may not be an exact type and so
-		// the final result might end up having a different value for each
-		// element, and so we'll always construct a tuple type even though
-		// we're going to specify the same type _constraint_ for each
-		// of its elements.
-		ty := v.Type()
-		var etys []cty.Type
+		ety, err := physicalConstraintForFieldKindSingle(field)
+		if err != nil {
+			return cty.DynamicPseudoType, err
+		}
 		switch {
 		case ty.IsTupleType():
-			etys = make([]cty.Type, len(ty.TupleElementTypes()))
-		case ty.IsListType() || ty.IsSetType():
-			if v.IsNull() || !v.IsKnown() {
-				// We'll deal with these trickier situations later.
-				return cty.DynamicPseudoType, nil
+			// Our per-element type constraint may not be an exact type and so
+			// the final result might end up having a different value for each
+			// element, and so we'll always construct a tuple type even though
+			// we're going to specify the same type _constraint_ for each
+			// of its elements.
+			etys := make([]cty.Type, len(ty.TupleElementTypes()))
+			for i := range etys {
+				etys[i] = ety
 			}
-			etys = make([]cty.Type, v.LengthInt())
+			return cty.Tuple(etys), nil
+		case ty.IsListType() || ty.IsSetType():
+			// If we're already holding a list or set then we know the final
+			// result must always have homogenous element types because the
+			// input already has homogenous element types. However, we'll
+			// normalize down to always using a list because a protobuf list
+			// field can't preserve our special set behaviors anyway.
+			return cty.List(ety), nil
 		}
+		return cty.DynamicPseudoType, schemaErrorf(field.FullName(), "can't populate list field from HCL %s", ty.FriendlyName())
 
-		ety, err := physicalConstraintForFieldKindSingle(field)
-		if err != nil {
-			return cty.DynamicPseudoType, err
-		}
-		for i := range etys {
-			etys[i] = ety
-		}
-		return cty.Tuple(etys), nil
 	case field.IsMap():
-		// Our per-element type constraint may not be an exact type and so
-		// the final result might end up having a different value for each
-		// element, and so we'll always construct an object type even though
-		// we're going to specify the same type _constraint_ for each
-		// of its elements.
-		ty := v.Type()
-
-		ety, err := physicalConstraintForFieldKindSingle(field)
+		ety, err := physicalConstraintForFieldKindSingle(field.MapValue())
 		if err != nil {
 			return cty.DynamicPseudoType, err
 		}
-		var atys map[string]cty.Type
 		switch {
 		case ty.IsObjectType():
-			atys = make(map[string]cty.Type)
+			// Our per-element type constraint may not be an exact type and so
+			// the final result might end up having a different value for each
+			// element, and so we'll always construct an object type even though
+			// we're going to specify the same type _constraint_ for each
+			// of its elements.
+			atys := make(map[string]cty.Type)
 			for name := range ty.AttributeTypes() {
 				atys[name] = ety
 			}
-		case ty.IsListType() || ty.IsSetType():
-			if v.IsNull() || !v.IsKnown() {
-				// We'll deal with these trickier situations later.
-				return cty.DynamicPseudoType, nil
-			}
-			atys = make(map[string]cty.Type)
-			for it := v.ElementIterator(); it.Next(); {
-				k, _ := it.Element()
-				atys[k.AsString()] = ety
-			}
+			return cty.Object(atys), nil
+		case ty.IsMapType():
+			// If we're already holding a map then we know the final result
+			// must always have homogenous element types, but we might still
+			// convert those elements to a different homogenous type.
+			return cty.Map(ety), nil
 		}
-		return cty.Object(atys), nil
+		return cty.DynamicPseudoType, schemaErrorf(field.FullName(), "can't populate map field from HCL %s", ty.FriendlyName())
+
 	default:
 		return physicalConstraintForFieldKindSingle(field)
 	}
@@ -368,5 +393,66 @@ func physicalConstraintForFieldKindSingle(field protoreflect.FieldDescriptor) (c
 		return cty.DynamicPseudoType, nil
 	default:
 		return cty.DynamicPseudoType, schemaErrorf(field.FullName(), "cannot decode a HCL value into a %s field", field.Kind())
+	}
+}
+
+// autoTypeConstraintForField tries to automatically select a reasonable type
+// constraint based on the given field descriptor, for situations where the
+// protobuf schema author didn't specify one explicitly.
+//
+// Returns cty.NilType if there is no suitable corresponding type, in which
+// case the schema author _must_ specify one.
+func autoTypeConstraintForField(field protoreflect.FieldDescriptor) cty.Type {
+	elemField := field
+	if field.IsMap() {
+		elemField = field.MapValue()
+	}
+
+	ety := autoTypeConstraintForFieldElement(elemField)
+	if ety == cty.NilType {
+		return ety
+	}
+
+	switch {
+	case field.IsList():
+		if ety.HasDynamicTypes() {
+			return cty.DynamicPseudoType // will need to choose a tuple type later
+		}
+		return cty.List(ety)
+	case field.IsMap():
+		if ety.HasDynamicTypes() {
+			return cty.DynamicPseudoType // will need to choose an object type later
+		}
+		return cty.Map(ety)
+	default:
+		return ety
+	}
+}
+
+// autoTypeConstraintForFieldElement is a part of autoTypeConstraintForField
+// which ignores the list-ness or map-ness of the field and just returns its
+// element type, under the assumption that autoTypeConstraintForField will
+// then wrap it in a collection type if needed.
+func autoTypeConstraintForFieldElement(field protoreflect.FieldDescriptor) cty.Type {
+	switch field.Kind() {
+	case protoreflect.BoolKind:
+		return cty.Bool
+	case protoreflect.EnumKind:
+		return cty.String
+	case protoreflect.Int32Kind, protoreflect.Sint32Kind, protoreflect.Uint32Kind, protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Uint64Kind, protoreflect.Sfixed32Kind, protoreflect.Fixed32Kind, protoreflect.Sfixed64Kind, protoreflect.Fixed64Kind, protoreflect.FloatKind, protoreflect.DoubleKind:
+		return cty.Number
+	case protoreflect.StringKind:
+		return cty.String
+	case protoreflect.MessageKind:
+		// TODO: Support this by inferring an object type constraint from
+		// the message type, once we have a "type constraint from message
+		// descriptor" helper function.
+		return cty.NilType
+	case protoreflect.BytesKind:
+		// We use "bytes" fields for our raw mode, which always requires
+		// an explicit type constraint.
+		return cty.NilType
+	default:
+		return cty.NilType
 	}
 }

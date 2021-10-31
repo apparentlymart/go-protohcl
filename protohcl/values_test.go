@@ -70,52 +70,49 @@ func TestObjectValueForMessage(t *testing.T) {
 			}),
 			``,
 		},
-		// TODO: Implement list, set, and map conversions
-		/*
-			"string list attribute": {
-				&testschema.WithStringListAttr{
-					Names: []string{"Jackson", "Rufus", "Agnes"},
-				},
-				cty.ObjectVal(map[string]cty.Value{
-					"names": cty.ListVal([]cty.Value{
-						cty.StringVal("Jackson"),
-						cty.StringVal("Rufus"),
-						cty.StringVal("Agnes"),
-					}),
-				}),
-				``,
+		"string list attribute": {
+			&testschema.WithStringListAttr{
+				Names: []string{"Jackson", "Rufus", "Agnes"},
 			},
-			"string set attribute": {
-				&testschema.WithStringSetAttr{
-					Names: []string{"Jackson", "Rufus", "Agnes"},
-				},
-				cty.ObjectVal(map[string]cty.Value{
-					"names": cty.SetVal([]cty.Value{
-						cty.StringVal("Agnes"),
-						cty.StringVal("Jackson"),
-						cty.StringVal("Rufus"),
-					}),
+			cty.ObjectVal(map[string]cty.Value{
+				"names": cty.ListVal([]cty.Value{
+					cty.StringVal("Jackson"),
+					cty.StringVal("Rufus"),
+					cty.StringVal("Agnes"),
 				}),
-				``,
+			}),
+			``,
+		},
+		"string set attribute": {
+			&testschema.WithStringSetAttr{
+				Names: []string{"Jackson", "Rufus", "Agnes"},
 			},
-			"string map attribute": {
-				&testschema.WithStringMapAttr{
-					Names: map[string]string{
-						"Martin": "Jackson",
-						"Kay":    "Rufus",
-						"Jen":    "Agnes",
-					},
-				},
-				cty.ObjectVal(map[string]cty.Value{
-					"names": cty.MapVal(map[string]cty.Value{
-						"Martin": cty.StringVal("Jackson"),
-						"Rufus":  cty.StringVal("Rufus"),
-						"Jen":    cty.StringVal("Agnes"),
-					}),
+			cty.ObjectVal(map[string]cty.Value{
+				"names": cty.SetVal([]cty.Value{
+					cty.StringVal("Agnes"),
+					cty.StringVal("Jackson"),
+					cty.StringVal("Rufus"),
 				}),
-				``,
+			}),
+			``,
+		},
+		"string map attribute": {
+			&testschema.WithStringMapAttr{
+				Names: map[string]string{
+					"Martin": "Jackson",
+					"Kay":    "Rufus",
+					"Jen":    "Agnes",
+				},
 			},
-		*/
+			cty.ObjectVal(map[string]cty.Value{
+				"names": cty.MapVal(map[string]cty.Value{
+					"Martin": cty.StringVal("Jackson"),
+					"Kay":    cty.StringVal("Rufus"),
+					"Jen":    cty.StringVal("Agnes"),
+				}),
+			}),
+			``,
+		},
 		"raw dynamic attribute as string": {
 			&testschema.WithRawDynamicAttr{
 				Raw: []byte(`{"value":"hello","type":"string"}`),

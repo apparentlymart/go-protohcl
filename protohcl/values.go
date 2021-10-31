@@ -56,7 +56,7 @@ func buildObjectValueAttrsForMessage(msg protoreflect.Message, path cty.Path, at
 		switch elem := elem.(type) {
 		case FieldAttribute:
 			path := append(path, cty.GetAttrStep{Name: elem.Name})
-			v, err := hclValueForProtoFieldValue(msg.Get(field), path, elem)
+			v, err := hclValueForProtoFieldValue(msg.Get(field), path, elem, false)
 			if err != nil {
 				return err
 			}
@@ -92,11 +92,11 @@ func buildObjectValueAttrsForMessage(msg protoreflect.Message, path cty.Path, at
 	return nil
 }
 
-func hclValueForProtoFieldValue(val protoreflect.Value, path cty.Path, attr FieldAttribute) (cty.Value, error) {
+func hclValueForProtoFieldValue(val protoreflect.Value, path cty.Path, attr FieldAttribute, subElem bool) (cty.Value, error) {
 	// Here we're really using the subset of normal Go types that
 	// protoreflect.Value uses internally, which is good enough for our goals,
 	// since the caller will convert the result into the exact type that
-	// the field is supposed to produce, anyway.\
+	// the field is supposed to produce, anyway.
 
 	switch raw := val.Interface().(type) {
 	case bool:
@@ -116,6 +116,12 @@ func hclValueForProtoFieldValue(val protoreflect.Value, path cty.Path, attr Fiel
 	case string:
 		return cty.StringVal(raw), nil
 	case []byte:
+		if subElem {
+			// We can only decode a "bytes" value that's directly in an
+			// annotated field. It's not valid to have a list or map of raw,
+			// and thus we reject this.
+			return cty.NilVal, schemaErrorf(attr.TargetField.FullName(), "can only use bytes directly as a raw field, not as element of collection in another field")
+		}
 		if len(raw) == 0 {
 			// A totally-unset raw field is another way to write a null value
 			// of its type constraint. We'll just return an untyped null here
@@ -153,9 +159,50 @@ func hclValueForProtoFieldValue(val protoreflect.Value, path cty.Path, attr Fiel
 		// Recursively transform the child message too, then.
 		return objectValueForMessage(raw, path)
 	case protoreflect.List:
-		return cty.NilVal, schemaErrorf(attr.TargetField.FullName(), "can't convert list value to HCL value yet")
+		// We always return a tuple at this layer, but the caller might then
+		// convert it into a list or set if the field options call for it.
+		if raw.Len() == 0 {
+			return cty.EmptyTupleVal, nil
+		}
+		elems := make([]cty.Value, raw.Len())
+		for i := range elems {
+			path := append(path, cty.IndexStep{Key: cty.NumberIntVal(int64(i))})
+			elemVal, err := hclValueForProtoFieldValue(raw.Get(i), path, attr, true)
+			if err != nil {
+				return cty.NilVal, err
+			}
+			elems[i] = elemVal
+		}
+		return cty.TupleVal(elems), nil
 	case protoreflect.Map:
-		return cty.NilVal, schemaErrorf(attr.TargetField.FullName(), "can't convert map value to HCL value yet")
+		// We always return an object at this layer, but the caller might then
+		// convert it into a list or set if the field options call for it.
+		if raw.Len() == 0 {
+			return cty.EmptyObjectVal, nil
+		}
+		attrs := make(map[string]cty.Value, raw.Len())
+		var err error
+		raw.Range(func(protoK protoreflect.MapKey, protoV protoreflect.Value) bool {
+			k, ok := protoK.Interface().(string)
+			if !ok {
+				// Should typically have caught this earlier, but we might
+				// catch it only here if we're directly encoding a value that
+				// isn't directly part of schema.
+				err = schemaErrorf(attr.TargetField.FullName(), "HCL doesn't support non-string map keys")
+				return false
+			}
+
+			path := append(path, cty.IndexStep{Key: cty.StringVal(k)})
+			attrs[k], err = hclValueForProtoFieldValue(protoV, path, attr, true)
+			if err != nil {
+				return false
+			}
+			return true
+		})
+		if err != nil {
+			return cty.NilVal, err
+		}
+		return cty.ObjectVal(attrs), nil
 	default:
 		// We shouldn't get here because the above should be exhaustive for
 		// all value types that our decoder can handle.

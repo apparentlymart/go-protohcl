@@ -94,6 +94,34 @@ message NestedBlock {
   // configuration. This must be set to declare that a field represents an
   // HCL nested block.
   string type_name = 1;
+
+  enum CollectionKind {
+    // AUTO allows protohcl to select a mode automatically.
+    //
+    // This is the only valid mode for non-repeated fields, and just passes
+    // through the inner message directly as an object value.
+    //
+    // For "repeated" fields, AUTO is the same as SEQ.
+    AUTO = 0;
+
+    // SEQ selects sequence mode, which produces either a list- or tuple-typed
+    // value depending on whether the nested message type calls for "any"
+    // type constraints which might therefore cause each element to have its
+    // own distinct type.
+    SEQ = 1;
+
+    // SET selects set mode, which requires an exact element type, and so it is
+    // valid only for nested blocks that have no "any" type constraints within.
+    SET = 2;
+  }
+  // For repeated fields representing nested block types, use set kind to
+  // control what kind of collection ObjectValueForMessage will use to
+  // contain the multiple objects representing multiple nested blocks.
+  //
+  // This is only relevant when converting a message to an object value.
+  // The collection kind is not considered when decoding from hcl.Body into
+  // a message.
+  CollectionKind kind = 2;
 }
 
 // Specifies that a particular field should recieve content from a label

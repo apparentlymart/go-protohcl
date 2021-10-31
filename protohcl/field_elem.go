@@ -99,10 +99,25 @@ func GetFieldElem(field protoreflect.FieldDescriptor) (FieldElem, error) {
 			return nil, schemaErrorf(field.FullName(), "field representing nested block must not be a map")
 		}
 
+		collectionKind := blockOpts.Kind
+		if field.IsList() {
+			if collectionKind == protohclext.NestedBlock_AUTO {
+				collectionKind = protohclext.NestedBlock_SEQ
+			}
+			if collectionKind != protohclext.NestedBlock_SEQ && collectionKind != protohclext.NestedBlock_SET {
+				return nil, schemaErrorf(field.FullName(), "unsupported collection kind %s", collectionKind)
+			}
+		} else {
+			if collectionKind != protohclext.NestedBlock_AUTO {
+				return nil, schemaErrorf(field.FullName(), "only repeated fields can have explicit block collection mode %s", collectionKind)
+			}
+		}
+
 		return FieldNestedBlockType{
-			TypeName: blockOpts.TypeName,
-			Nested:   field.Message(),
-			Repeated: field.IsList(),
+			TypeName:       blockOpts.TypeName,
+			Nested:         field.Message(),
+			Repeated:       field.IsList(),
+			CollectionKind: collectionKind,
 		}, nil
 
 	case flatten:
@@ -193,9 +208,10 @@ func (fa FieldAttribute) autoTypeConstraint() (cty.Type, error) {
 func (fa FieldAttribute) fieldElem() {}
 
 type FieldNestedBlockType struct {
-	TypeName string
-	Nested   protoreflect.MessageDescriptor
-	Repeated bool
+	TypeName       string
+	Nested         protoreflect.MessageDescriptor
+	Repeated       bool
+	CollectionKind protohclext.NestedBlock_CollectionKind
 }
 
 func (fa FieldNestedBlockType) fieldElem() {}

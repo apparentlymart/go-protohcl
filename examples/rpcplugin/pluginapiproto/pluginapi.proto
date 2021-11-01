@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+// This is the package shared by both the client and the server, which defines
+// the RPC API that the plugin must implement.
+package protohcl.example.rpcplugin.api;
+
+option go_package = "github.com/apparentlymart/go-protohcl/examples/rpcplugin/pluginapiproto";
+
+import "google/protobuf/descriptor.proto";
+import "google/protobuf/any.proto";
+import "google/protobuf/empty.proto";
+
+service Plugin {
+    // GetConfigDescriptors allows the client to request plugin-specific
+    // protocol buffers descriptor information that the client will use for
+    // various other interactions with the plugin.
+    rpc GetConfigDescriptors (google.protobuf.Empty) returns (ConfigDescriptors);
+
+    // Execute is a placeholder for a plugin API opeation, which both accepts
+    // HCL configuration as input and returns a HCL-friendly result object
+    // in its response.
+    rpc Execute (ExecuteRequest) returns (ExecuteResponse);
+}
+
+message ConfigDescriptors {
+    // Descriptors for the protobuf schema file containing the message type
+    // that represents the root of the plugin's configuration, and whatever
+    // message type Execute will return as its result, and any other files
+    // needed to interpret the HCL-related parts of those message types.
+    google.protobuf.FileDescriptorSet files = 1;
+
+    // The full name of the message type that Execute expects for the
+    // config field, including protobuf package name and message type name.
+    string config_message_type = 2;
+}
+
+message ExecuteRequest {
+    // Message representing the configuration, which is guaranteed to be of
+    // the type returned earlier in ConfigDescriptors.config_message_type.
+    google.protobuf.Any config = 1;
+}
+
+message ExecuteResponse {
+    // Message representing the result that could be exposed as an HCL value
+    // to other parts of the configuration. May be of any message type that
+    // was included in the GetConfigDescriptors result, and can thus be
+    // analyzed by the plugin client using the corresponding descriptor.
+    google.protobuf.Any result = 1;
+}

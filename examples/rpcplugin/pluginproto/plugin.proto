@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+// This is a package known only to the server. The client doesn't have any
+// of this compiled in and so it'll learn about the message types in here
+// only at runtime, via the GetConfigDescriptors function.
+package protohcl.example.rpcplugin.plugin;
+
+option go_package = "github.com/apparentlymart/go-protohcl/examples/rpcplugin/pluginproto";
+
+import "hcl.proto";
+
+message Config {
+    string region = 1 [(hcl.attr).name = "region"];
+    string project = 2 [(hcl.attr).name = "project"];
+    string name = 3 [(hcl.attr).name = "name", (hcl.attr).required = true];
+
+    repeated Service services = 4 [(hcl.block).type_name = "service"];
+}
+
+message Service {
+    string name = 1 [(hcl.label).name = "name"];
+    repeated string argv = 2 [(hcl.attr).name = "argv"];
+}
+
+message Result {
+    string id = 1 [(hcl.attr).name = "id"];
+    repeated string service_ids = 2 [(hcl.attr).name = "service_ids"];
+}

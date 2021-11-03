@@ -71,6 +71,17 @@ func GetFieldElem(field protoreflect.FieldDescriptor) (FieldElem, error) {
 		} else if field.Kind() == protoreflect.BytesKind {
 			return nil, schemaErrorf(field.FullName(), "'bytes' fields must have raw mode enabled")
 		}
+		elemDesc := field
+		if field.IsMap() {
+			elemDesc = field.MapValue()
+		}
+		if elemDesc.Kind() == protoreflect.MessageKind {
+			if elemDesc.Message().FullName() == structpbValueDesc.FullName() {
+				if attrOpts.Type == "" {
+					return nil, schemaErrorf(field.FullName(), "must specify (hcl.attr).type for google.protobuf.Struct field")
+				}
+			}
+		}
 
 		return FieldAttribute{
 			Name:           attrOpts.Name,

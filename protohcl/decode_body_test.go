@@ -18,6 +18,7 @@ func TestDecodeBody(t *testing.T) {
 	fileDesc := testschema.File_testschema_proto
 	simpleRootDesc := fileDesc.Messages().ByName(protoreflect.Name("WithStringAttr"))
 	simpleRawRootDesc := fileDesc.Messages().ByName(protoreflect.Name("WithRawDynamicAttr"))
+	withStructMapAttrDesc := fileDesc.Messages().ByName(protoreflect.Name("WithStructMapAttr"))
 	withNestedBlockNoLabelsSingletonDesc := fileDesc.Messages().ByName(protoreflect.Name("WithNestedBlockNoLabelsSingleton"))
 	withNestedBlockOneLabelSingletonDesc := fileDesc.Messages().ByName(protoreflect.Name("WithNestedBlockOneLabelSingleton"))
 	withFlattenStringAttrDesc := fileDesc.Messages().ByName(protoreflect.Name("WithFlattenStringAttr"))
@@ -227,6 +228,17 @@ func TestDecodeBody(t *testing.T) {
 			nil,
 			&testschema.WithRawDynamicAttr{
 				// "Raw" doesn't get populated at all for null, for consistency with omitting it
+			},
+			nil,
+		},
+		"struct map attribute as empty map": {
+			`
+				structs = {}
+			`,
+			withStructMapAttrDesc,
+			nil,
+			&testschema.WithRawDynamicAttr{
+				Raw: []byte(`{"value":"Hello","type":"string"}`),
 			},
 			nil,
 		},

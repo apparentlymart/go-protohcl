@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	hcl "github.com/hashicorp/hcl/v2"
+	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/convert"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -135,6 +136,29 @@ func fillMessageFromContent(content *hcl.BodyContent, missingRange hcl.Range, ms
 					})
 				}
 				// We'll just leave the field cleared, then.
+				continue
+			}
+
+			// If we're decoding into a message-typed field then we treat that
+			// as special so that our message-type-specific decoding strategy
+			// can handle it.
+			elemField := field
+			if field.IsMap() {
+				elemField = field.MapValue()
+			}
+			if elemField.Kind() == protoreflect.MessageKind {
+				builder, err := getFieldAttrMessageBuilder(elem)
+				if err != nil {
+					diags = append(diags, schemaErrorDiagnostic(err))
+					continue
+				}
+				path := make(cty.Path, 0, 4) // some capacity to grow
+				protoVal, err := builder(val, path, msg)
+				if err != nil {
+					diags = append(diags, attrErrorDiagnostic(err))
+					continue
+				}
+				msg.Set(field, protoVal)
 				continue
 			}
 

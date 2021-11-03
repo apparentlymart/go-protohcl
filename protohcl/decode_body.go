@@ -138,6 +138,23 @@ func fillMessageFromContent(content *hcl.BodyContent, missingRange hcl.Range, ms
 				continue
 			}
 
+			// If we're decoding into a message-typed field then we treat that
+			// as special so that our message-type-specific decoding strategy
+			// can handle it.
+			if isMessageField(elem) {
+				protoVal, err := valueForMessageField(val, elem, msg)
+				if err != nil {
+					diags = diags.Append(attrErrorDiagnostic(err))
+					continue
+				}
+				if !protoValueIsSet(protoVal) {
+					// We already cleared the field above, so nothing more to do
+					continue
+				}
+				msg.Set(field, protoVal)
+				continue
+			}
+
 			needTy, err := valuePhysicalConstraintForFieldKind(val.Type(), field)
 			if err != nil {
 				diags = diags.Append(schemaErrorDiagnostic(err))

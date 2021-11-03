@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/testing/protocmp"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 var protoCmpOpt = protocmp.Transform()
@@ -18,6 +19,10 @@ func TestDecodeBody(t *testing.T) {
 	fileDesc := testschema.File_testschema_proto
 	simpleRootDesc := fileDesc.Messages().ByName(protoreflect.Name("WithStringAttr"))
 	simpleRawRootDesc := fileDesc.Messages().ByName(protoreflect.Name("WithRawDynamicAttr"))
+	withStructDynamicAttrDesc := fileDesc.Messages().ByName(protoreflect.Name("WithStructDynamicAttr"))
+	withStructStringAttrDesc := fileDesc.Messages().ByName(protoreflect.Name("WithStructStringAttr"))
+	withStructMapAttrDesc := fileDesc.Messages().ByName(protoreflect.Name("WithStructMapAttr"))
+	withStructListAttrDesc := fileDesc.Messages().ByName(protoreflect.Name("WithStructListAttr"))
 	withNestedBlockNoLabelsSingletonDesc := fileDesc.Messages().ByName(protoreflect.Name("WithNestedBlockNoLabelsSingleton"))
 	withNestedBlockOneLabelSingletonDesc := fileDesc.Messages().ByName(protoreflect.Name("WithNestedBlockOneLabelSingleton"))
 	withFlattenStringAttrDesc := fileDesc.Messages().ByName(protoreflect.Name("WithFlattenStringAttr"))
@@ -230,6 +235,130 @@ func TestDecodeBody(t *testing.T) {
 			},
 			nil,
 		},
+		"struct dynamic attribute as null": {
+			`
+				struct = null
+			`,
+			withStructDynamicAttrDesc,
+			nil,
+			&testschema.WithStructDynamicAttr{},
+			nil,
+		},
+		"struct dynamic attribute omitted": {
+			``,
+			withStructDynamicAttrDesc,
+			nil,
+			&testschema.WithStructDynamicAttr{},
+			nil,
+		},
+		"struct dynamic attribute as string": {
+			`
+				struct = "hello!"
+			`,
+			withStructDynamicAttrDesc,
+			nil,
+			&testschema.WithStructDynamicAttr{
+				Struct: mustStructpbValue(map[string]interface{}{
+					"value": "hello!",
+					"type":  "string",
+				}),
+			},
+			nil,
+		},
+		"struct string attribute as string": {
+			`
+				struct = "hello!"
+			`,
+			withStructStringAttrDesc,
+			nil,
+			&testschema.WithStructStringAttr{
+				Struct: structpb.NewStringValue("hello!"),
+			},
+			nil,
+		},
+		"struct dynamic attribute as object": {
+			`
+				struct = { a = 1 }
+			`,
+			withStructDynamicAttrDesc,
+			nil,
+			&testschema.WithStructDynamicAttr{
+				Struct: mustStructpbValue(map[string]interface{}{
+					"value": map[string]interface{}{
+						"a": 1,
+					},
+					"type": []interface{}{"object", map[string]interface{}{
+						"a": "number",
+					}},
+				}),
+			},
+			nil,
+		},
+		"struct map attribute as empty map": {
+			`
+				structs = {}
+			`,
+			withStructMapAttrDesc,
+			nil,
+			&testschema.WithStructMapAttr{
+				Structs: nil,
+			},
+			nil,
+		},
+		"struct map attribute as map with elements": {
+			`
+				structs = {
+				  a = 1
+				  b = "hello"
+				}
+			`,
+			withStructMapAttrDesc,
+			nil,
+			&testschema.WithStructMapAttr{
+				Structs: map[string]*structpb.Value{
+					"a": mustStructpbValue(map[string]interface{}{
+						"value": 1,
+						"type":  "number",
+					}),
+					"b": mustStructpbValue(map[string]interface{}{
+						"value": "hello",
+						"type":  "string",
+					}),
+				},
+			},
+			nil,
+		},
+		"struct list attribute as empty list": {
+			`
+				structs = []
+			`,
+			withStructListAttrDesc,
+			nil,
+			&testschema.WithStructListAttr{
+				Structs: nil,
+			},
+			nil,
+		},
+		"struct list attribute as list with elements": {
+			`
+				structs = [1, "hello"]
+			`,
+			withStructListAttrDesc,
+			nil,
+			&testschema.WithStructListAttr{
+				Structs: []*structpb.Value{
+					mustStructpbValue(map[string]interface{}{
+						"value": 1,
+						"type":  "number",
+					}),
+					mustStructpbValue(map[string]interface{}{
+						"value": "hello",
+						"type":  "string",
+					}),
+				},
+			},
+			nil,
+		},
 		"singleton block type with no labels": {
 			`
 				doodad {
@@ -376,4 +505,12 @@ func TestDecodeBody(t *testing.T) {
 		})
 	}
 
+}
+
+func mustStructpbValue(raw interface{}) *structpb.Value {
+	ret, err := structpb.NewValue(raw)
+	if err != nil {
+		panic(err)
+	}
+	return ret
 }

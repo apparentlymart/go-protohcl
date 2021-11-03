@@ -158,6 +158,18 @@ func TestObjectValueForMessage(t *testing.T) {
 			cty.NilVal,
 			`invalid encoding of dynamic value as bytes: failed to read dynamic type descriptor key: invalid character 'i'`,
 		},
+		"structpb.Value dynamic string": {
+			&testschema.WithStructDynamicAttr{
+				Struct: mustStructpbValue(map[string]interface{}{
+					"value": "boop",
+					"type":  "string",
+				}),
+			},
+			cty.ObjectVal(map[string]cty.Value{
+				"struct": cty.StringVal("boop"),
+			}),
+			``,
+		},
 		"flattened nested messages": {
 			&testschema.WithNestedFlattenStringAttr{
 				Base: &testschema.WithFlattenStringAttr{

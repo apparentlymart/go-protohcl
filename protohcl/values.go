@@ -8,8 +8,10 @@ import (
 	"github.com/zclconf/go-cty/cty/convert"
 	ctyjson "github.com/zclconf/go-cty/cty/json"
 	ctymsgpack "github.com/zclconf/go-cty/cty/msgpack"
+	"github.com/zclconf/go-ctypb/ctystructpb"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // ObjectValueForMessage returns an HCL value, guaranteed to be of an object
@@ -224,9 +226,37 @@ func hclValueForProtoFieldValue(val protoreflect.Value, path cty.Path, attr Fiel
 		// TODO: Handle this once we handle enum types elsewhere too
 		return cty.NilVal, schemaErrorf(attr.TargetField.FullName(), "can't convert enum value to HCL value yet")
 	case protoreflect.Message:
-		// Recursively transform the child message too, then.
+		// Recursively transform the child message too, then,
+		// but there are some message types we treat in a special way.
+		matchDesc := attr.TargetField
+		if matchDesc.IsMap() {
+			matchDesc = matchDesc.MapValue()
+		}
+		if matchDesc.Message().FullName() == structpbValueDesc.FullName() {
+			if subElem {
+				// We can only decode a struct value that's directly in an
+				// annotated field, because we need a type constraint.
+				return cty.NilVal, schemaErrorf(attr.TargetField.FullName(), "can only use google.protobuf.Value directly as an annotated field, not as nested element inside one")
+			}
+			sv, ok := raw.Interface().(*structpb.Value)
+			if !ok {
+				return cty.NilVal, schemaErrorf(attr.TargetField.FullName(), "dynamic type is not *structpb.Value")
+			}
+			wantTy, diags := attr.TypeConstraint()
+			if diags.HasErrors() {
+				return cty.NilVal, schemaErrorf(attr.TargetField.FullName(), "invalid HCL type constraint")
+			}
+			v, err := ctystructpb.FromStructValue(sv, wantTy)
+			if err != nil {
+				return cty.NilVal, path.NewErrorf("invalid encoding of %s value as google.protobuf.Value: %s", wantTy.FriendlyName(), err)
+			}
+			return v, nil
+		}
+
 		return objectValueForMessage(raw, path)
 	case protoreflect.List:
+		// TODO: Handle the special case for a list of structpb.Value, similar to the protoreflect.Message case above
+
 		// We always return a tuple at this layer, but the caller might then
 		// convert it into a list or set if the field options call for it.
 		if raw.Len() == 0 {
@@ -243,6 +273,8 @@ func hclValueForProtoFieldValue(val protoreflect.Value, path cty.Path, attr Fiel
 		}
 		return cty.TupleVal(elems), nil
 	case protoreflect.Map:
+		// TODO: Handle the special case for a map of structpb.Value, similar to the protoreflect.Message case above
+
 		// We always return an object at this layer, but the caller might then
 		// convert it into a list or set if the field options call for it.
 		if raw.Len() == 0 {

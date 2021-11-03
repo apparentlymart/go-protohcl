@@ -1,9 +1,11 @@
 package protohcl
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"math/big"
+	"strconv"
 
 	"github.com/apparentlymart/go-protohcl/protohcl/protohclext"
 	"github.com/hashicorp/hcl/v2"
@@ -382,10 +384,10 @@ func physicalConstraintForFieldKindSingle(field protoreflect.FieldDescriptor) (c
 	case protoreflect.StringKind:
 		return cty.String, nil
 	case protoreflect.MessageKind:
-		// TODO: Support this by inferring an object type constraint from
-		// the message type, once we have a "type constraint from message
-		// descriptor" helper function.
-		return cty.DynamicPseudoType, schemaErrorf(field.FullName(), "cannot decode a HCL value into a message-typed field")
+		// We delay constraining values destined for message-typed fields
+		// because we have various different strategies for these, which
+		// we'll decide later.
+		return cty.DynamicPseudoType, nil
 	case protoreflect.BytesKind:
 		// We use "bytes" fields for our raw mode, so in that case we want
 		// to skip any further constraining of the value so we can just store
@@ -455,4 +457,33 @@ func autoTypeConstraintForFieldElement(field protoreflect.FieldDescriptor) cty.T
 	default:
 		return cty.NilType
 	}
+}
+
+func formatCtyPath(path cty.Path) string {
+	var buf bytes.Buffer
+	for _, step := range path {
+		switch ts := step.(type) {
+		case cty.GetAttrStep:
+			fmt.Fprintf(&buf, ".%s", ts.Name)
+		case cty.IndexStep:
+			buf.WriteByte('[')
+			key := ts.Key
+			keyTy := key.Type()
+			switch {
+			case key.IsNull():
+				buf.WriteString("null")
+			case !key.IsKnown():
+				buf.WriteString("(not yet known)")
+			case keyTy == cty.Number:
+				bf := key.AsBigFloat()
+				buf.WriteString(bf.Text('g', -1))
+			case keyTy == cty.String:
+				buf.WriteString(strconv.Quote(key.AsString()))
+			default:
+				buf.WriteString("...")
+			}
+			buf.WriteByte(']')
+		}
+	}
+	return buf.String()
 }

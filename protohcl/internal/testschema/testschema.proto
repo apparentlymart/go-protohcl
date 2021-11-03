@@ -5,6 +5,7 @@ package hcl.testschema;
 option go_package = "github.com/apparentlymart/go-protohcl/protohcl/internal/testschema";
 
 import "hcl.proto";
+import "google/protobuf/struct.proto";
 
 message Root {
   // Name represents an HCL attribute
@@ -42,6 +43,34 @@ message WithRawDynamicAttr {
     (hcl.attr).type = "any",
     (hcl.attr).raw = JSON
   ];
+}
+
+message WithStructDynamicAttr {
+  // protohcl has special support for decoding into google.protobuf.Struct,
+  // which it treats similar to a "raw" field.
+  google.protobuf.Value struct = 1
+      [ (hcl.attr).name = "struct", (hcl.attr).type = "any" ];
+}
+
+message WithStructStringAttr {
+  // protohcl has special support for decoding into google.protobuf.Struct,
+  // which it treats similar to a "raw" field.
+  google.protobuf.Value struct = 1
+      [ (hcl.attr).name = "struct", (hcl.attr).type = "string" ];
+}
+
+message WithStructListAttr {
+  // protohcl has special support for decoding into google.protobuf.Struct,
+  // which it treats similar to a "raw" field.
+  repeated google.protobuf.Value structs = 1
+      [ (hcl.attr).name = "structs", (hcl.attr).type = "any" ];
+}
+
+message WithStructMapAttr {
+  // protohcl has special support for decoding into google.protobuf.Struct,
+  // which it treats similar to a "raw" field.
+  map<string, google.protobuf.Value> structs = 1
+      [ (hcl.attr).name = "structs", (hcl.attr).type = "any" ];
 }
 
 message WithNumberAttrAsInt32 {
@@ -100,7 +129,7 @@ message WithNestedBlockNoLabelsSingleton {
 
 message WithNestedBlockOneLabelSingleton {
   // A nested block type with one label
-  WithOneBlockLabel doodad = 1 [ (hcl.block).type_name = "doodad"];
+  WithOneBlockLabel doodad = 1 [ (hcl.block).type_name = "doodad" ];
 }
 
 message WithNestedBlockTwoLabelSingleton {
@@ -110,12 +139,14 @@ message WithNestedBlockTwoLabelSingleton {
 
 message WithNestedBlockNoLabelsRepeated {
   // A nested block type no labels
-  repeated WithStringAttr doodad = 1 [ (hcl.block).type_name = "doodad", (hcl.block).kind = SET ];
+  repeated WithStringAttr doodad = 1
+      [ (hcl.block).type_name = "doodad", (hcl.block).kind = SET ];
 }
 
 message WithNestedBlockOneLabelRepeated {
   // A nested block type with one label
-  repeated WithOneBlockLabel doodad = 1 [ (hcl.block).type_name = "doodad", (hcl.block).kind = LIST ];
+  repeated WithOneBlockLabel doodad = 1
+      [ (hcl.block).type_name = "doodad", (hcl.block).kind = LIST ];
 }
 
 message WithNestedBlockTwoLabelRepeated {
